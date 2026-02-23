@@ -7,6 +7,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32),
   JWT_EMAIL_SECRET: z.string().min(32).optional(),
   APP_BASE_URL: z.string().url(),
+  EXECUTION_API_URL: z.string().url(),
   MAILGUN_API_KEY: z.string().min(1).optional(),
   MAILGUN_DOMAIN: z.string().min(1).optional(),
   MAIL_FROM: z.string().email().optional(),

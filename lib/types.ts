@@ -96,12 +96,59 @@ export type FlowchartData = {
 };
 
 export type RunResult = {
-  output: string;
+  executionId?: string;
+  status: "queued" | "running" | "completed" | "failed";
+  language?: ProblemLanguage;
+  createdAt?: number;
+  progress?: {
+    type?: "progress";
+    current: number;
+    total: number;
+    output?: string;
+  };
+  result?: ExecutionVerdict;
   tests: Array<{
     id: string;
-    name: string;
+    name?: string;
     passed: boolean;
+    expectedOutput?: string;
+    actualOutput?: string;
   }>;
+};
+
+export type ExecuteQueuedResponse = {
+  executionId: string;
+  status: "queued";
+};
+
+export type ExecuteResultResponse = {
+  executionId?: string;
+  language?: ProblemLanguage;
+  status: "queued" | "running" | "completed" | "failed";
+  createdAt?: number;
+  progress?: {
+    type?: "progress";
+    current: number;
+    total: number;
+    output?: string;
+  };
+  result?: ExecutionVerdict;
+};
+
+export type ExecutionVerdict = {
+  type?: "final";
+  status:
+    | "Accepted"
+    | "Wrong Answer"
+    | "Compilation Error"
+    | "Runtime Error"
+    | "Time Limit Exceeded";
+  passed?: number;
+  total?: number;
+  failedTestCase?: number;
+  error?: string;
+  expected?: string;
+  got?: string;
 };
 
 export type SubmitResult = {

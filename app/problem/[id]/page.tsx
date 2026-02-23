@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
-import type { ProblemSolveData, SubmitResult } from "@/lib/types";
+import type { ProblemSolveData, RunResult, SubmitResult } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -12,6 +12,7 @@ import { FlowchartPanel } from "@/components/flow/FlowchartPanel";
 import { useBehaviorTracking } from "@/hooks/useBehaviorTracking";
 
 type LeftTab = "problem" | "testcases" | "flowchart" | "submissions";
+type ExecutionUiState = "idle" | "queued" | "running" | "completed" | "timeout";
 
 function escapeHtml(value: string) {
   return value
@@ -103,6 +104,9 @@ export default function ProblemSolvePage() {
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState<"python" | "c" | "java">("python");
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [executionState, setExecutionState] = useState<ExecutionUiState>("idle");
+  const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editorHeight, setEditorHeight] = useState(460);
@@ -122,6 +126,8 @@ export default function ProblemSolvePage() {
         setProblem(data);
         setLanguage(data.selectedLanguage);
         setCode(data.baseCode || "");
+        setRunResult(null);
+        setExecutionState("idle");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load problem");
       }
@@ -139,6 +145,8 @@ export default function ProblemSolvePage() {
         const data = await api.getProblemSolveData(id, { classroomId, language });
         setProblem(data);
         setCode(data.baseCode || "");
+        setRunResult(null);
+        setExecutionState("idle");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load runtime");
       }
@@ -150,7 +158,7 @@ export default function ProblemSolvePage() {
   }, [classroomId, language, params, problem]);
 
   const startResize = (event: React.MouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
+    // event.preventDefault();
     resizeStartYRef.current = event.clientY;
     resizeStartHeightRef.current = editorHeight;
 
@@ -187,7 +195,7 @@ export default function ProblemSolvePage() {
     [problem],
   );
 
-  const output = useMemo(() => {
+  const submissionOutput = useMemo(() => {
     if (!submitResult) return "Submission has not been created yet.";
     return [
       `Submission ID: ${submitResult.submissionId}`,
@@ -196,6 +204,61 @@ export default function ProblemSolvePage() {
       `Data Path: ${submitResult.submissionDataFilePath}`,
     ].join("\n");
   }, [submitResult]);
+
+  const testcaseChecksById = useMemo(() => {
+    const checks = visibleTestcases.map((test, index) => {
+      const result = runResult?.result;
+      let passed = false;
+      if (runResult?.status === "completed") {
+        if (result?.status === "Accepted") {
+          passed = true;
+        } else if (result?.status === "Wrong Answer" && typeof result.failedTestCase === "number") {
+          passed = index + 1 !== result.failedTestCase;
+        }
+      }
+      return {
+        id: test.id,
+        expectedOutput: test.expectedOutput,
+        actualOutput: result?.got ?? "",
+        passed,
+      };
+    });
+    return new Map(checks.map((check) => [check.id, check]));
+  }, [runResult, visibleTestcases]);
+
+  const runOutput = useMemo(() => {
+    if (executionState === "timeout") return "Execution timed out after 60 seconds.";
+    if (!runResult) return "Run has not been executed yet.";
+    if (runResult.status === "queued" || runResult.status === "running") {
+      return `Execution ${runResult.status}...`;
+    }
+    if (runResult.status === "failed") {
+      return runResult.result?.error || "Execution failed.";
+    }
+    if (!runResult.result) {
+      return "Execution completed, but verdict is unavailable.";
+    }
+    return [
+      `Status: ${runResult.result.status}`,
+      `Passed: ${runResult.result.passed ?? 0}/${runResult.result.total ?? 0}`,
+      runResult.result.error ? `Error: ${runResult.result.error}` : null,
+      runResult.result.expected ? `Expected: ${runResult.result.expected}` : null,
+      runResult.result.got ? `Got: ${runResult.result.got}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }, [executionState, runResult]);
+
+  const statusBadge = useMemo(() => {
+    if (executionState === "queued") return { label: "Queued", tone: "warning" as const };
+    if (executionState === "running") return { label: "Running", tone: "warning" as const };
+    if (executionState === "timeout") return { label: "Timed Out", tone: "danger" as const };
+    if (runResult?.result?.status === "Accepted") return { label: "Accepted", tone: "success" as const };
+    if (runResult?.status === "completed" || runResult?.status === "failed") {
+      return { label: runResult.result?.status ?? "Error", tone: "danger" as const };
+    }
+    return { label: "Idle", tone: "neutral" as const };
+  }, [executionState, runResult]);
 
   const tabClass = (active: boolean) =>
     `rounded-full border px-4 py-2 text-sm ${
@@ -221,6 +284,68 @@ export default function ProblemSolvePage() {
       setError(err instanceof Error ? err.message : "Failed to submit");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRun = async () => {
+    if (!problem) {
+      setError("Problem is not loaded.");
+      return;
+    }
+
+    console.info("[run] step 1: preparing execution request", {
+      language,
+      testcaseCount: problem.testcases.length,
+    });
+    setRunResult(null);
+    setExecutionState("queued");
+    setRunning(true);
+    setError(null);
+    tracking.recordRun();
+
+    try {
+      console.info("[run] step 2: sending execute request");
+      const result = await api.runCodeWithPolling(language, code, problem.testcases, {
+        pollIntervalMs: 2000,
+        maxPollAttempts: 30,
+        onUpdate: (update) => {
+          setRunResult((prev) => ({
+            executionId: update.executionId ?? prev?.executionId,
+            language: update.language ?? prev?.language ?? language,
+            status: update.status,
+            createdAt: update.createdAt ?? prev?.createdAt,
+            progress: update.progress ?? prev?.progress,
+            result: update.result ?? prev?.result,
+            tests: [],
+          }));
+          if (update.status === "queued") setExecutionState("queued");
+          if (update.status === "running") setExecutionState("running");
+          if (update.status === "completed" || update.status === "failed") setExecutionState("completed");
+        },
+      });
+      console.info("[run] step 3: execution result received", {
+        executionId: result.executionId,
+        status: result.status,
+        verdict: result.result?.status,
+      });
+      setRunResult(result);
+      const total = result.result?.total ?? problem.testcases.length;
+      const passed = result.result?.passed ?? 0;
+      const failureCount = Math.max(total - passed, 0);
+      if (failureCount > 0) {
+        console.info("[run] step 4: recording test failures", { failureCount });
+        tracking.recordTestFailure(failureCount);
+      }
+    } catch (err) {
+      console.error("[run] failed", err);
+      const message = err instanceof Error ? err.message : "Failed to run code";
+      if (message.includes("timed out")) {
+        setExecutionState("timeout");
+      }
+      setError(message);
+    } finally {
+      console.info("[run] step 5: run flow finished");
+      setRunning(false);
     }
   };
 
@@ -252,6 +377,7 @@ export default function ProblemSolvePage() {
               </Badge>
             ) : null}
             <Badge tone="neutral">{language.toUpperCase()}</Badge>
+            <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
           </div>
         </div>
       </section>
@@ -320,7 +446,22 @@ export default function ProblemSolvePage() {
                     <div key={test.id} className="rounded-lg border border-slate-400/20 bg-slate-900/50 p-3">
                       <div className="mb-2 flex items-center justify-between">
                         <span className="text-sm font-medium text-slate-200">{test.id}</span>
-                        <Badge tone="neutral">Visible</Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge tone="neutral">Visible</Badge>
+                          {runResult?.status === "completed" ? (
+                            <Badge
+                              tone={
+                                testcaseChecksById.get(test.id)?.passed
+                                  ? "success"
+                                  : "danger"
+                              }
+                            >
+                              {testcaseChecksById.get(test.id)?.passed
+                                ? "Pass"
+                                : "Fail"}
+                            </Badge>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
                         <div>
@@ -332,6 +473,14 @@ export default function ProblemSolvePage() {
                           <pre className="min-h-14 whitespace-pre-wrap rounded-lg border border-slate-400/15 bg-slate-950/70 p-2 text-xs text-slate-100">{test.expectedOutput || "(empty)"}</pre>
                         </div>
                       </div>
+                      {runResult ? (
+                        <div className="mt-2">
+                          <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Actual Output</label>
+                          <pre className="min-h-14 whitespace-pre-wrap rounded-lg border border-slate-400/15 bg-slate-950/70 p-2 text-xs text-slate-100">
+                            {runResult.result?.got || runResult.result?.error || "(empty)"}
+                          </pre>
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                   {visibleTestcases.length === 0 ? (
@@ -351,9 +500,79 @@ export default function ProblemSolvePage() {
               <div className="rounded-xl border border-slate-400/20 bg-slate-950/50 p-4">
                 <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-200">Submission</h3>
                 <pre className="whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/70 p-3 font-mono text-xs text-slate-100">
-                  {output}
+                  {submissionOutput}
                 </pre>
               </div>
+
+              <div className="rounded-xl border border-slate-400/20 bg-slate-950/50 p-4">
+                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-200">Run Result</h3>
+                <pre className="whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/70 p-3 font-mono text-xs text-slate-100">
+                  {runOutput}
+                </pre>
+              </div>
+
+              {runResult?.status === "running" && runResult.progress ? (
+                <div className="rounded-xl border border-slate-400/20 bg-slate-950/50 p-4">
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-200">Progress</h3>
+                  <p className="mb-2 text-sm text-slate-300">
+                    Running test {runResult.progress.current} of {runResult.progress.total}...
+                  </p>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className="h-full bg-sky-400 transition-all"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(0, (runResult.progress.current / Math.max(runResult.progress.total, 1)) * 100),
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/70 p-3 font-mono text-xs text-slate-100">
+                    {runResult.progress.output || "(no output yet)"}
+                  </pre>
+                </div>
+              ) : null}
+
+              {runResult?.result?.status === "Wrong Answer" ? (
+                <div className="rounded-xl border border-rose-400/30 bg-rose-950/20 p-4">
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-rose-200">Wrong Answer</h3>
+                  <p className="mb-2 text-sm text-rose-100">
+                    Failed test case: {runResult.result.failedTestCase ?? "Unknown"}
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    <div>
+                      <p className="mb-1 text-xs uppercase tracking-wide text-slate-300">Expected</p>
+                      <pre className="whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/80 p-3 font-mono text-xs text-slate-100">
+                        {runResult.result.expected || "(empty)"}
+                      </pre>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-xs uppercase tracking-wide text-slate-300">Got</p>
+                      <pre className="whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/80 p-3 font-mono text-xs text-slate-100">
+                        {runResult.result.got || "(empty)"}
+                      </pre>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {runResult?.result?.status === "Compilation Error" || runResult?.result?.status === "Runtime Error" ? (
+                <div className="rounded-xl border border-rose-400/30 bg-rose-950/20 p-4">
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-rose-200">
+                    {runResult.result.status}
+                  </h3>
+                  <pre className="whitespace-pre-wrap rounded-lg border border-rose-400/25 bg-slate-950/80 p-3 font-mono text-xs text-rose-100">
+                    {runResult.result.error || "(no error output)"}
+                  </pre>
+                </div>
+              ) : null}
+
+              {runResult?.result?.status === "Time Limit Exceeded" ? (
+                <div className="rounded-xl border border-amber-400/30 bg-amber-950/20 p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-200">Time Limit Exceeded</h3>
+                </div>
+              ) : null}
 
             </div>
           )}
@@ -400,7 +619,13 @@ export default function ProblemSolvePage() {
             aria-label="Resize editor"
           />
 
-          <div className="flex justify-end px-5 py-3">
+          <div className="flex justify-end gap-3 px-5 py-3">
+            <Button onClick={handleRun} disabled={running || submitting}>
+              <span className="inline-flex items-center gap-2">
+                {running ? <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-transparent" /> : null}
+                {running ? "Running..." : "Run"}
+              </span>
+            </Button>
             <Button variant="secondary" onClick={handleSubmit} disabled={submitting}>
               {submitting ? "Submitting..." : "Submit"}
             </Button>

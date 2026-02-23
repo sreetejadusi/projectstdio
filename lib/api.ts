@@ -2,7 +2,12 @@ import type {
   AuthResponse,
   Classroom,
   ClassroomDetail,
+  ExecuteQueuedResponse,
+  ExecuteResultResponse,
+  ProblemTestCase,
   ProblemSolveData,
+  ProblemLanguage,
+  RunResult,
   SubmitResult,
   TelemetryEvent,
 } from "@/lib/types";
@@ -93,4 +98,74 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ events }),
     }),
+  enqueueExecution: (language: ProblemLanguage, code: string, testcases: ProblemTestCase[]) =>
+    fetchJSON<ApiSuccess<ExecuteQueuedResponse>>("/execute", {
+      method: "POST",
+      body: JSON.stringify({
+        language,
+        code,
+        testcases: testcases.map((testcase) => ({
+          input: testcase.input,
+          expectedOutput: testcase.expectedOutput,
+        })),
+      }),
+    }).then((res) => res.data),
+  getExecutionResult: (executionId: string) =>
+    fetchJSON<ApiSuccess<ExecuteResultResponse>>(`/result/${executionId}`).then((res) => res.data),
+  runCodeWithPolling: async (
+    language: ProblemLanguage,
+    code: string,
+    testcases: ProblemTestCase[],
+    options?: {
+      pollIntervalMs?: number;
+      maxPollAttempts?: number;
+      onUpdate?: (state: ExecuteResultResponse) => void;
+    },
+  ): Promise<RunResult> => {
+    const pollIntervalMs = options?.pollIntervalMs ?? 2000;
+    const maxPollAttempts = options?.maxPollAttempts ?? 30;
+    console.info("[run] enqueue started", { language, testcaseCount: testcases.length });
+    const queued = await api.enqueueExecution(language, code, testcases);
+    console.info("[run] enqueue completed", queued);
+    options?.onUpdate?.({
+      executionId: queued.executionId,
+      language,
+      status: queued.status,
+    });
+
+    for (let attempt = 0; attempt < maxPollAttempts; attempt += 1) {
+      console.info("[run] polling result", { executionId: queued.executionId, attempt: attempt + 1 });
+      let result: ExecuteResultResponse;
+      try {
+        result = await api.getExecutionResult(queued.executionId);
+      } catch (error) {
+        console.warn("[run] polling request failed, preserving last known progress", {
+          executionId: queued.executionId,
+          attempt: attempt + 1,
+          error: error instanceof Error ? error.message : "unknown_error",
+        });
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        continue;
+      }
+      options?.onUpdate?.(result);
+      if (result.status === "completed" || result.status === "failed") {
+        console.info("[run] execution finished", {
+          executionId: result.executionId,
+          status: result.status,
+          verdict: result.result?.status,
+        });
+        return {
+          executionId: result.executionId,
+          status: result.status,
+          language: result.language,
+          createdAt: result.createdAt,
+          result: result.result,
+          tests: [],
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    throw new Error("Execution polling timed out");
+  },
 };

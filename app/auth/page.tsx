@@ -32,7 +32,7 @@ export default function AuthPage() {
   });
 
   const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
+    // event.preventDefault();
     setLoading(true);
     setError(null);
 

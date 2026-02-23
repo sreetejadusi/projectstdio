@@ -55,21 +55,21 @@ export function MonacoCodeEditor({
     const domNode = editor.getDomNode();
     if (domNode) {
       const handlePaste = (event: ClipboardEvent) => {
-        event.preventDefault();
-        onPasteAttempt?.();
+        // event.preventDefault();
+        // onPasteAttempt?.();
       };
 
       const handleDrop = (event: DragEvent) => {
-        event.preventDefault();
+        // event.preventDefault();
       };
 
       const handleContextMenu = (event: MouseEvent) => {
-        event.preventDefault();
+        // event.preventDefault();
       };
 
-      domNode.addEventListener("paste", handlePaste);
-      domNode.addEventListener("drop", handleDrop);
-      domNode.addEventListener("contextmenu", handleContextMenu);
+      // domNode.addEventListener("paste", handlePaste);
+      // domNode.addEventListener("drop", handleDrop);
+      // domNode.addEventListener("contextmenu", handleContextMenu);
 
       rootRef.current = domNode;
 
@@ -91,7 +91,7 @@ export function MonacoCodeEditor({
         e.shiftKey && e.keyCode === monaco.KeyCode.Insert;
 
       if (isPaste || isShiftInsert) {
-        e.preventDefault();
+        // e.preventDefault();
         onPasteAttempt?.();
       }
     });
