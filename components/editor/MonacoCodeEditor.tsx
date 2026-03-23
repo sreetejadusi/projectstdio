@@ -26,30 +26,55 @@ export function MonacoCodeEditor({
   onPasteAttempt,
   onContentChange,
 }: Props) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const rootRef = useRef<HTMLElement | null>(null);
 
   const handleBeforeMount: BeforeMount = (monaco) => {
-    monaco.editor.defineTheme("studio-dark", {
-      base: "vs-dark",
+    monaco.editor.defineTheme("studio-light", {
+      base: "vs",
       inherit: true,
-      rules: [],
+      rules: [
+        { token: "comment", foreground: "9a7b5f", fontStyle: "italic" },
+        { token: "keyword", foreground: "b45309" },
+        { token: "string", foreground: "047857" },
+        { token: "number", foreground: "c2410c" },
+        { token: "type", foreground: "9d174d" },
+      ],
       colors: {
-        "editor.background": "#0b1120",
-        "editorLineNumber.foreground": "#475569",
-        "editorLineNumber.activeForeground": "#e2e8f0",
+        "editor.background": "#fffdfa",
+        "editor.foreground": "#221c16",
+        "editorLineNumber.foreground": "#b8a48b",
+        "editorLineNumber.activeForeground": "#7c5a34",
+        "editorGutter.background": "#fffdfa",
+        "editorIndentGuide.background1": "#efe2cf",
+        "editorIndentGuide.activeBackground1": "#d6b98d",
+        "editor.selectionBackground": "#fde7bf",
+        "editor.inactiveSelectionBackground": "#fdf1d8",
+        "editor.lineHighlightBackground": "#fff4e4",
+        "editorCursor.foreground": "#b45309",
+        "editorWhitespace.foreground": "#ead9c2",
+        "editorBracketMatch.border": "#f59e0b",
       },
     });
   };
 
   const handleMount: OnMount = (editor, monaco) => {
     editor.updateOptions({
-      fontSize: 14,
+      fontSize: 13,
+      lineHeight: 22,
       minimap: { enabled: false },
       scrollbar: { verticalScrollbarSize: 6, horizontalScrollbarSize: 6 },
       tabSize: 2,
       contextmenu: false,
       dragAndDrop: false,
       cursorBlinking: "solid",
+      glyphMargin: false,
+      folding: false,
+      renderLineHighlight: "line",
+      roundedSelection: true,
+      smoothScrolling: true,
+      overviewRulerBorder: false,
+      hideCursorInOverviewRuler: true,
+      automaticLayout: true,
     });
 
     const domNode = editor.getDomNode();
@@ -111,21 +136,21 @@ export function MonacoCodeEditor({
   }, []);
 
   return (
-    <div className="editor-shell">
+    <div className="editor-shell h-full bg-[#fffdfa]">
       <Editor
         height="100%"
         defaultLanguage={LANGUAGE_MAP[language]}
         language={LANGUAGE_MAP[language]}
-        theme="studio-dark"
+        theme="studio-light"
         value={value}
         onChange={(next) => onChange(next ?? "")}
         beforeMount={handleBeforeMount}
         onMount={handleMount}
         options={{
           readOnly: false,
-          wordWrap: "on",
+          wordWrap: "off",
           fontFamily: "var(--font-mono)",
-          padding: { top: 16, bottom: 16 },
+          padding: { top: 18, bottom: 18 },
         }}
       />
     </div>

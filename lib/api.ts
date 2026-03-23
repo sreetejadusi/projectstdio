@@ -2,14 +2,18 @@ import type {
   AuthResponse,
   Classroom,
   ClassroomDetail,
+  CourseCatalogItem,
+  CourseDetail,
   ExecuteQueuedResponse,
   ExecuteResultResponse,
   ProblemTestCase,
+  ProblemMetadata,
   ProblemSolveData,
   ProblemLanguage,
   RunResult,
   SubmitResult,
   TelemetryEvent,
+  VisualizationTrace,
 } from "@/lib/types";
 
 const API_BASE =
@@ -76,6 +80,41 @@ export const api = {
     fetchJSON<ApiSuccess<{ classroom: ClassroomDetail }>>(`/classrooms/${id}`).then(
       (res) => res.data.classroom,
     ),
+  getCourses: () =>
+    fetchJSON<ApiSuccess<{ courses: CourseCatalogItem[] }>>("/courses").then(
+      (res) => res.data.courses,
+    ),
+  getCourse: (slug: string) =>
+    fetchJSON<ApiSuccess<{ course: CourseDetail }>>(`/courses/${slug}`).then(
+      (res) => res.data.course,
+    ),
+  updateCourseTopicProgress: (
+    slug: string,
+    input: { moduleId: string; topicId: string; completed?: boolean },
+  ) =>
+    fetchJSON<ApiSuccess<{ course: CourseDetail }>>(`/courses/${slug}/topic-progress`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }).then((res) => res.data.course),
+  getProblem: (id: string) =>
+    fetchJSON<ApiSuccess<{ problem: ProblemMetadata }>>(`/problems/${id}`).then(
+      (res) => res.data.problem,
+    ),
+  visualizeCode: (input: { language: "python" | "c" | "java"; code: string; input: string }) =>
+    fetch("/visualize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+      cache: "no-store",
+    }).then(async (res) => {
+      const payload = (await res.json().catch(() => null)) as
+        | { success?: boolean; data?: VisualizationTrace; error?: { message?: string } }
+        | null;
+      if (!res.ok || !payload?.success || !payload.data) {
+        throw new Error(payload?.error?.message || `Visualization error: ${res.status}`);
+      }
+      return payload.data;
+    }),
   getProblemSolveData: (
     id: string,
     options?: { classroomId?: string; language?: "c" | "java" | "python" },

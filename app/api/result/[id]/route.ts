@@ -57,17 +57,31 @@ export async function GET(
       | { message?: string }
       | null;
 
+    const upstreamMessage =
+      payload &&
+      typeof payload === "object" &&
+      "message" in payload &&
+      typeof payload.message === "string"
+        ? payload.message
+        : null;
+
     if (!upstreamResponse.ok) {
       throw new AppError(
-        typeof payload === "object" && payload && "message" in payload && payload.message
-          ? payload.message
-          : "Execution result lookup failed",
+        upstreamMessage ?? "Execution result lookup failed",
         upstreamResponse.status,
         "EXECUTION_RESULT_FAILED",
       );
     }
 
-    if (!payload || typeof payload !== "object" || typeof payload.status !== "string") {
+    const resultPayload =
+      payload &&
+      typeof payload === "object" &&
+      "status" in payload &&
+      typeof payload.status === "string"
+        ? (payload as ResultUpstreamResponse)
+        : null;
+
+    if (!resultPayload) {
       throw new AppError("Invalid response from execution service", 502, "INVALID_EXECUTION_RESPONSE");
     }
 
@@ -77,16 +91,16 @@ export async function GET(
       endpoint: ENDPOINT,
       message: "Step 4: returning result payload",
       metadata: {
-        executionId: payload.executionId,
-        status: typeof payload.status === "string" ? payload.status : undefined,
+        executionId: resultPayload.executionId,
+        status: resultPayload.status,
         verdict:
-          payload.result && typeof payload.result === "object" && "status" in payload.result
-            ? payload.result.status
+          resultPayload.result && typeof resultPayload.result === "object" && "status" in resultPayload.result
+            ? resultPayload.result.status
             : undefined,
       },
     });
 
-    return successResponse(payload, context, ENDPOINT);
+    return successResponse(resultPayload, context, ENDPOINT);
   } catch (error) {
     return handleApiError(error, context, ENDPOINT);
   }

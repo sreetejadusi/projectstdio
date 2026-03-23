@@ -23,7 +23,8 @@ export async function middleware(request: NextRequest) {
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const isPublicApi = pathname.startsWith("/api") && PUBLIC_API_PATHS.has(pathname);
-  const isProtectedApi = pathname.startsWith("/api") && !isPublicApi;
+  const isVisualizationRoute = pathname === "/visualize";
+  const isProtectedApi = (pathname.startsWith("/api") && !isPublicApi) || isVisualizationRoute;
 
   if (!token) {
     if (isProtectedApi) {
@@ -81,5 +82,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*"],
+  matcher: ["/api/:path*", "/visualize"],
 };

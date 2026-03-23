@@ -1,10 +1,7 @@
 export function Footer() {
   return (
-    <footer className=" flex flex-col gap-2 p-4 bg-(--text-primary) text-(--bg)">
-      <img src="./logo-dark.svg" alt="" className="w-12" />
-      <div className="footer-meta">
-        © 2026 Project Stdio. concepts Patented. all rights reserved
-      </div>
+    <footer className="rounded-[24px] border border-[color:var(--border)] bg-[linear-gradient(180deg,#fffdf8,#fff7eb)] px-5 py-4 text-xs text-[color:var(--text-secondary)] shadow-[0_12px_28px_rgba(105,83,55,0.05)]">
+      <p>Project Stdio • A lighter, calmer space for coding practice and coursework</p>
     </footer>
   );
 }

@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { TelemetryProvider } from "@/components/providers/TelemetryProvider";
-import { TopNav } from "@/components/layout/TopNav";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
+const inter = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
 });
@@ -16,7 +15,7 @@ const jetBrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: "Project Stdio",
-  description: "Instructor/student coding workspace",
+  description: "Coding learning platform for learners and institutions",
 };
 
 export default function RootLayout({
@@ -26,11 +25,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${spaceGrotesk.variable} ${jetBrains.variable}`}>
-        <TelemetryProvider>
-          <TopNav />
-          {children}
-        </TelemetryProvider>
+      <body className={`${inter.variable} ${jetBrains.variable}`}>
+        <TelemetryProvider>{children}</TelemetryProvider>
       </body>
     </html>
   );

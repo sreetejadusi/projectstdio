@@ -13,7 +13,7 @@ export default function ForgotPasswordPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent) => {
-    // event.preventDefault();
+    event.preventDefault();
     setLoading(true);
     setMessage(null);
 
@@ -31,25 +31,14 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="auth-simple-page">
-      <Card title="Forgot password" className="auth-simple-card">
-        <form onSubmit={handleSubmit} className="auth-form">
-          <TextInput
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@school.edu"
-            required
-          />
-          {message ? <p className="muted">{message}</p> : null}
-          <div className="auth-simple-actions">
-            <Button type="submit" disabled={loading}>
-              {loading ? "Sending..." : "Send reset link"}
-            </Button>
-            <Link href="/auth" className="btn btn-secondary">
-              Back to login
-            </Link>
+    <div className="grid min-h-screen place-items-center p-4">
+      <Card title="Forgot password" className="w-full max-w-md">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <TextInput label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@school.edu" required />
+          {message ? <p className="text-sm text-[color:var(--text-secondary)]">{message}</p> : null}
+          <div className="flex gap-2">
+            <Button type="submit" disabled={loading}>{loading ? "Sending..." : "Send reset link"}</Button>
+            <Link href="/auth" className="inline-flex h-10 items-center justify-center rounded-lg border border-[color:var(--border)] px-4 text-sm text-[color:var(--text-secondary)]">Back</Link>
           </div>
         </form>
       </Card>

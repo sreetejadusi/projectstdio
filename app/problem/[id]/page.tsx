@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { MonacoCodeEditor } from "@/components/editor/MonacoCodeEditor";
 import { FlowchartPanel } from "@/components/flow/FlowchartPanel";
+import { ExecutionVisualizer } from "@/components/visualization/ExecutionVisualizer";
 import { useBehaviorTracking } from "@/hooks/useBehaviorTracking";
 
-type LeftTab = "problem" | "testcases" | "flowchart" | "submissions";
+type LeftTab = "problem" | "flowchart" | "submissions";
+type EditorTab = "testcases" | "output" | "visualization" | "console";
 type ExecutionUiState = "idle" | "queued" | "running" | "completed" | "timeout";
 
 function escapeHtml(value: string) {
@@ -101,6 +103,7 @@ export default function ProblemSolvePage() {
 
   const [problem, setProblem] = useState<ProblemSolveData | null>(null);
   const [leftTab, setLeftTab] = useState<LeftTab>("problem");
+  const [editorTab, setEditorTab] = useState<EditorTab>("testcases");
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState<"python" | "c" | "java">("python");
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
@@ -261,10 +264,10 @@ export default function ProblemSolvePage() {
   }, [executionState, runResult]);
 
   const tabClass = (active: boolean) =>
-    `rounded-full border px-4 py-2 text-sm ${
+    `rounded-lg border px-3 py-1.5 text-sm transition ${
       active
-        ? "border-sky-300/70 bg-sky-500/20 text-white"
-        : "border-slate-400/30 bg-slate-900/60 text-slate-300"
+        ? "border-[color:var(--primary)]/60 bg-[color:var(--primary)]/20 text-[color:var(--text-primary)]"
+        : "border-[color:var(--border)] bg-white/80 text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)]"
     }`;
 
   const handleSubmit = async () => {
@@ -350,288 +353,171 @@ export default function ProblemSolvePage() {
   };
 
   return (
-    <AppShell hideFooter>
-      <section className="mb-5 rounded-[18px] border border-slate-400/20 bg-[linear-gradient(120deg,rgba(15,23,42,0.95),rgba(15,23,42,0.72))] p-5 shadow-[0_18px_40px_rgba(15,23,42,0.35)]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Problem Workspace</p>
-            <h1 className="mt-1 text-2xl font-semibold text-slate-50">
-              {problem?.title ?? "Loading problem"}
-            </h1>
-            <p className="mt-2 text-sm text-slate-400">
-              {classroomId ? `Classroom: ${classroomId}` : "Open in classroom context to submit."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {problem ? (
-              <Badge
-                tone={
-                  problem.difficulty === "easy"
-                    ? "success"
-                    : problem.difficulty === "medium"
-                      ? "warning"
-                      : "danger"
-                }
-              >
-                {problem.difficulty}
-              </Badge>
-            ) : null}
-            <Badge tone="neutral">{language.toUpperCase()}</Badge>
-            <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
-          </div>
-        </div>
-      </section>
-
-      <div className="grid min-h-[calc(100vh-280px)] grid-cols-1 gap-5 xl:grid-cols-2">
-        <section className="overflow-hidden rounded-[18px] border border-slate-400/20 bg-[linear-gradient(170deg,rgba(15,23,42,0.88),rgba(15,23,42,0.62))] shadow-[0_18px_40px_rgba(15,23,42,0.35)]">
-          <div className="flex items-start justify-between gap-3 border-b border-slate-400/20 px-5 py-4">
+    <AppShell hideFooter hideSidebar>
+      <div className="space-y-4">
+        <header className="rounded-xl border border-[color:var(--border)] bg-[linear-gradient(135deg,#fff8eb,#fff2f0_45%,#fff9f2)] p-4 shadow-[0_12px_28px_rgba(105,83,55,0.06)]">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-slate-100">Problem Details</h2>
-              {error ? <p className="mt-1 text-sm text-rose-400">{error}</p> : null}
+              <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)]">Problem Workspace</p>
+              <h1 className="mt-1 text-2xl font-semibold">{problem?.title ?? "Loading problem"}</h1>
+              <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
+                {classroomId ? `Classroom: ${classroomId}` : "Open inside classroom context to enable graded submission."}
+              </p>
+              {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {problem ? (
+                <Badge tone={problem.difficulty === "easy" ? "success" : problem.difficulty === "medium" ? "warning" : "danger"}>
+                  {problem.difficulty}
+                </Badge>
+              ) : null}
+              <Badge tone="neutral">{language.toUpperCase()}</Badge>
+              <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
             </div>
           </div>
+        </header>
 
-          <div className="flex gap-2 border-b border-slate-400/20 px-5 py-3" role="tablist" aria-label="Problem panels">
-            <button
-              type="button"
-              className={tabClass(leftTab === "problem")}
-              onClick={() => setLeftTab("problem")}
-            >
-              Problem
-            </button>
-            <button
-              type="button"
-              className={tabClass(leftTab === "testcases")}
-              onClick={() => setLeftTab("testcases")}
-            >
-              Testcases
-            </button>
-            <button
-              type="button"
-              className={tabClass(leftTab === "flowchart")}
-              onClick={() => setLeftTab("flowchart")}
-            >
-              Flowchart
-            </button>
-            <button
-              type="button"
-              className={tabClass(leftTab === "submissions")}
-              onClick={() => setLeftTab("submissions")}
-            >
-              Submissions
-            </button>
-          </div>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <section className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-white/80 shadow-[0_10px_24px_rgba(105,83,55,0.04)]">
+            <div className="flex flex-wrap gap-2 border-b border-[color:var(--border)] p-3">
+              <button type="button" className={tabClass(leftTab === "problem")} onClick={() => setLeftTab("problem")}>Problem</button>
+              <button type="button" className={tabClass(leftTab === "flowchart")} onClick={() => setLeftTab("flowchart")}>Flowchart</button>
+              <button type="button" className={tabClass(leftTab === "submissions")} onClick={() => setLeftTab("submissions")}>Submissions</button>
+            </div>
 
-          {leftTab === "problem" ? (
-            <div className="flex max-h-[calc(100vh-320px)] flex-col gap-4 overflow-auto p-5">
-              <article
-                className="rounded-xl border border-slate-400/20 bg-slate-950/60 p-4 text-slate-100
+            {leftTab === "problem" ? (
+              <div className="app-scrollbar max-h-[calc(100vh-300px)] space-y-4 overflow-auto p-4">
+                <article
+                  className="rounded-lg border border-[color:var(--border)] bg-white/80 p-4 text-sm
                   [&_h1]:mb-2 [&_h1]:text-xl [&_h2]:mb-2 [&_h2]:text-lg [&_h3]:mb-2 [&_h3]:text-base
-                  [&_p]:mb-2 [&_pre]:mb-2 [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-slate-950 [&_pre]:p-3
+                  [&_p]:mb-2 [&_pre]:mb-2 [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-[#fff7eb] [&_pre]:p-3
                   [&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_code]:font-mono"
-                dangerouslySetInnerHTML={{ __html: renderedDescription }}
-              />
-
-              <div className="rounded-xl border border-slate-400/20 bg-slate-950/50 p-4">
-                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-200">Constraints</h3>
-                <p className="text-slate-300">{problem?.constraints || "No constraints provided."}</p>
+                  dangerouslySetInnerHTML={{ __html: renderedDescription }}
+                />
+                <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-4">
+                  <h3 className="mb-2 text-xs uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">Constraints</h3>
+                  <p className="text-sm text-[color:var(--text-secondary)]">{problem?.constraints || "No constraints provided."}</p>
+                </div>
               </div>
+            ) : leftTab === "flowchart" ? (
+              <div className="h-[calc(100vh-300px)] p-4">
+                <FlowchartPanel data={problem?.flowchart ?? null} />
+              </div>
+            ) : (
+              <div className="app-scrollbar max-h-[calc(100vh-300px)] space-y-4 overflow-auto p-4">
+                <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-4">
+                  <h3 className="mb-2 text-xs uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">Submission</h3>
+                  <pre className="whitespace-pre-wrap font-mono text-xs text-[color:var(--text-secondary)]">{submissionOutput}</pre>
+                </div>
+                <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-4">
+                  <h3 className="mb-2 text-xs uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">Run Result</h3>
+                  <pre className="whitespace-pre-wrap font-mono text-xs text-[color:var(--text-secondary)]">{runOutput}</pre>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-white/80 shadow-[0_10px_24px_rgba(105,83,55,0.04)]">
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[color:var(--border)] p-3">
+              <div>
+                <h2 className="text-lg font-semibold">Code Editor</h2>
+                <p className="text-xs text-[color:var(--text-secondary)]">VS Code style workspace with run and submit actions.</p>
+              </div>
+              <label className="grid gap-1 text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
+                Language
+                <select
+                  id="language"
+                  value={language}
+                  onChange={(event) => setLanguage(event.target.value as "python" | "c" | "java")}
+                  className="h-9 rounded-lg border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-primary)] outline-none"
+                >
+                  {(problem?.languages || []).map((option) => (
+                    <option key={option} value={option}>
+                      {option.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
-          ) : leftTab === "testcases" ? (
-            <div className="flex max-h-[calc(100vh-320px)] flex-col gap-4 overflow-auto p-5">
-              <div className="rounded-xl border border-slate-400/20 bg-slate-950/50 p-4">
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-200">Visible Test Cases</h3>
-                <div className="flex flex-col gap-3">
+
+            <div className="overflow-hidden border-y border-[color:var(--border)]" style={{ height: `${editorHeight}px` }}>
+              <MonacoCodeEditor
+                language={language}
+                value={code}
+                onChange={setCode}
+                onKeystroke={(timestamp) => tracking.recordKeystroke(timestamp)}
+                onPasteAttempt={() => tracking.recordPasteAttempt()}
+                onContentChange={(length) => tracking.recordContentChange(length)}
+              />
+            </div>
+
+            <div
+              className="h-2 cursor-ns-resize border-y border-[color:var(--primary)]/40 bg-gradient-to-r from-[color:var(--primary)]/10 via-[color:var(--success)]/10 to-[color:var(--primary)]/10"
+              onMouseDown={startResize}
+              role="separator"
+              aria-label="Resize editor"
+            />
+
+            <div className="flex flex-wrap justify-end gap-2 border-b border-[color:var(--border)] p-3">
+              <Button onClick={handleRun} disabled={running || submitting}>
+                {running ? "Running..." : "Run"}
+              </Button>
+              <Button variant="secondary" onClick={handleSubmit} disabled={submitting}>
+                {submitting ? "Submitting..." : "Submit"}
+              </Button>
+            </div>
+
+            <div className="p-3">
+              <div className="mb-3 flex flex-wrap gap-2">
+                <button type="button" className={tabClass(editorTab === "testcases")} onClick={() => setEditorTab("testcases")}>Testcases</button>
+                <button type="button" className={tabClass(editorTab === "output")} onClick={() => setEditorTab("output")}>Output</button>
+                <button type="button" className={tabClass(editorTab === "visualization")} onClick={() => setEditorTab("visualization")}>Visualization</button>
+                <button type="button" className={tabClass(editorTab === "console")} onClick={() => setEditorTab("console")}>Console</button>
+              </div>
+
+              {editorTab === "testcases" ? (
+                <div className="app-scrollbar max-h-60 space-y-2 overflow-auto">
                   {visibleTestcases.map((test) => (
-                    <div key={test.id} className="rounded-lg border border-slate-400/20 bg-slate-900/50 p-3">
+                    <div key={test.id} className="rounded-lg border border-[color:var(--border)] bg-white/80 p-3">
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-medium text-slate-200">{test.id}</span>
-                        <div className="flex items-center gap-2">
-                          <Badge tone="neutral">Visible</Badge>
-                          {runResult?.status === "completed" ? (
-                            <Badge
-                              tone={
-                                testcaseChecksById.get(test.id)?.passed
-                                  ? "success"
-                                  : "danger"
-                              }
-                            >
-                              {testcaseChecksById.get(test.id)?.passed
-                                ? "Pass"
-                                : "Fail"}
-                            </Badge>
-                          ) : null}
-                        </div>
+                        <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">{test.id}</p>
+                        {runResult?.status === "completed" ? (
+                          <Badge tone={testcaseChecksById.get(test.id)?.passed ? "success" : "danger"}>
+                            {testcaseChecksById.get(test.id)?.passed ? "Pass" : "Fail"}
+                          </Badge>
+                        ) : null}
                       </div>
-                      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Input</label>
-                          <pre className="min-h-14 whitespace-pre-wrap rounded-lg border border-slate-400/15 bg-slate-950/70 p-2 text-xs text-slate-100">{test.input || "(empty)"}</pre>
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Expected Output</label>
-                          <pre className="min-h-14 whitespace-pre-wrap rounded-lg border border-slate-400/15 bg-slate-950/70 p-2 text-xs text-slate-100">{test.expectedOutput || "(empty)"}</pre>
-                        </div>
-                      </div>
-                      {runResult ? (
-                        <div className="mt-2">
-                          <label className="mb-1 block text-[11px] uppercase tracking-wide text-slate-400">Actual Output</label>
-                          <pre className="min-h-14 whitespace-pre-wrap rounded-lg border border-slate-400/15 bg-slate-950/70 p-2 text-xs text-slate-100">
-                            {runResult.result?.got || runResult.result?.error || "(empty)"}
-                          </pre>
-                        </div>
-                      ) : null}
+                      <p className="text-xs text-[color:var(--text-secondary)]">Input: {test.input || "(empty)"}</p>
+                      <p className="mt-1 text-xs text-[color:var(--text-secondary)]">Expected: {test.expectedOutput || "(empty)"}</p>
                     </div>
                   ))}
-                  {visibleTestcases.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-slate-400/30 p-4 text-center text-sm text-slate-400">
-                      No visible test cases in metadata.
-                    </div>
-                  ) : null}
                 </div>
-              </div>
-            </div>
-          ) : leftTab === "flowchart" ? (
-            <div className="h-[calc(100vh-320px)] p-5">
-              <FlowchartPanel data={problem?.flowchart ?? null} />
-            </div>
-          ) : (
-            <div className="flex max-h-[calc(100vh-320px)] flex-col gap-4 overflow-auto p-5">
-              <div className="rounded-xl border border-slate-400/20 bg-slate-950/50 p-4">
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-200">Submission</h3>
-                <pre className="whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/70 p-3 font-mono text-xs text-slate-100">
-                  {submissionOutput}
-                </pre>
-              </div>
+              ) : null}
 
-              <div className="rounded-xl border border-slate-400/20 bg-slate-950/50 p-4">
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-200">Run Result</h3>
-                <pre className="whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/70 p-3 font-mono text-xs text-slate-100">
+              {editorTab === "output" ? (
+                <pre className="app-scrollbar max-h-60 overflow-auto rounded-lg border border-[color:var(--border)] bg-white/80 p-3 font-mono text-xs text-[color:var(--text-secondary)]">
                   {runOutput}
                 </pre>
-              </div>
+              ) : null}
 
-              {runResult?.status === "running" && runResult.progress ? (
-                <div className="rounded-xl border border-slate-400/20 bg-slate-950/50 p-4">
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-200">Progress</h3>
-                  <p className="mb-2 text-sm text-slate-300">
-                    Running test {runResult.progress.current} of {runResult.progress.total}...
-                  </p>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
-                    <div
-                      className="h-full bg-sky-400 transition-all"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          Math.max(0, (runResult.progress.current / Math.max(runResult.progress.total, 1)) * 100),
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/70 p-3 font-mono text-xs text-slate-100">
-                    {runResult.progress.output || "(no output yet)"}
-                  </pre>
+              {editorTab === "visualization" ? (
+                <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-3">
+                  <ExecutionVisualizer
+                    language={language}
+                    code={code}
+                    testcases={problem?.testcases ?? []}
+                  />
                 </div>
               ) : null}
 
-              {runResult?.result?.status === "Wrong Answer" ? (
-                <div className="rounded-xl border border-rose-400/30 bg-rose-950/20 p-4">
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-rose-200">Wrong Answer</h3>
-                  <p className="mb-2 text-sm text-rose-100">
-                    Failed test case: {runResult.result.failedTestCase ?? "Unknown"}
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                    <div>
-                      <p className="mb-1 text-xs uppercase tracking-wide text-slate-300">Expected</p>
-                      <pre className="whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/80 p-3 font-mono text-xs text-slate-100">
-                        {runResult.result.expected || "(empty)"}
-                      </pre>
-                    </div>
-                    <div>
-                      <p className="mb-1 text-xs uppercase tracking-wide text-slate-300">Got</p>
-                      <pre className="whitespace-pre-wrap rounded-lg border border-slate-400/20 bg-slate-950/80 p-3 font-mono text-xs text-slate-100">
-                        {runResult.result.got || "(empty)"}
-                      </pre>
-                    </div>
-                  </div>
-                </div>
+              {editorTab === "console" ? (
+                <pre className="app-scrollbar max-h-60 overflow-auto rounded-lg border border-[color:var(--border)] bg-white/80 p-3 font-mono text-xs text-[color:var(--text-secondary)]">
+                  {runResult?.progress?.output || runResult?.result?.error || "Console logs will appear here after run."}
+                </pre>
               ) : null}
-
-              {runResult?.result?.status === "Compilation Error" || runResult?.result?.status === "Runtime Error" ? (
-                <div className="rounded-xl border border-rose-400/30 bg-rose-950/20 p-4">
-                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-rose-200">
-                    {runResult.result.status}
-                  </h3>
-                  <pre className="whitespace-pre-wrap rounded-lg border border-rose-400/25 bg-slate-950/80 p-3 font-mono text-xs text-rose-100">
-                    {runResult.result.error || "(no error output)"}
-                  </pre>
-                </div>
-              ) : null}
-
-              {runResult?.result?.status === "Time Limit Exceeded" ? (
-                <div className="rounded-xl border border-amber-400/30 bg-amber-950/20 p-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-amber-200">Time Limit Exceeded</h3>
-                </div>
-              ) : null}
-
             </div>
-          )}
-        </section>
-
-        <section className="overflow-hidden rounded-[18px] border border-slate-400/20 bg-[linear-gradient(170deg,rgba(15,23,42,0.88),rgba(15,23,42,0.62))] shadow-[0_18px_40px_rgba(15,23,42,0.35)]">
-          <div className="flex items-start justify-between gap-3 border-b border-slate-400/20 px-5 py-4">
-            <div>
-              <h2 className="text-xl font-semibold">Code Editor</h2>
-              <p className="text-sm text-slate-400">Drag the bar below the editor to resize height.</p>
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="language" className="text-xs uppercase tracking-wide text-slate-400">Language</label>
-              <select
-                id="language"
-                value={language}
-                onChange={(event) => setLanguage(event.target.value as "python" | "c" | "java")}
-                className="rounded-xl border border-slate-400/30 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-              >
-                {(problem?.languages || []).map((option) => (
-                  <option key={option} value={option}>
-                    {option.toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="overflow-hidden border-y border-slate-400/20" style={{ height: `${editorHeight}px` }}>
-            <MonacoCodeEditor
-              language={language}
-              value={code}
-              onChange={setCode}
-              onKeystroke={(timestamp) => tracking.recordKeystroke(timestamp)}
-              onPasteAttempt={() => tracking.recordPasteAttempt()}
-              onContentChange={(length) => tracking.recordContentChange(length)}
-            />
-          </div>
-
-          <div
-            className="h-2 cursor-ns-resize border-y border-sky-300/25 bg-gradient-to-r from-sky-300/15 via-emerald-300/20 to-sky-300/15"
-            onMouseDown={startResize}
-            role="separator"
-            aria-label="Resize editor"
-          />
-
-          <div className="flex justify-end gap-3 px-5 py-3">
-            <Button onClick={handleRun} disabled={running || submitting}>
-              <span className="inline-flex items-center gap-2">
-                {running ? <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-slate-200 border-t-transparent" /> : null}
-                {running ? "Running..." : "Run"}
-              </span>
-            </Button>
-            <Button variant="secondary" onClick={handleSubmit} disabled={submitting}>
-              {submitting ? "Submitting..." : "Submit"}
-            </Button>
-          </div>
-
-        </section>
+          </section>
+        </div>
       </div>
     </AppShell>
   );

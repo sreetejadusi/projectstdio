@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
+
   return NextResponse.json({
-    id: params.id,
-    name: params.id === "alpha" ? "Algorithms 301" : "Classroom",
-    role: params.id === "alpha" ? "instructor" : "student",
+    id,
+    name: id === "alpha" ? "Algorithms 301" : "Classroom",
+    role: id === "alpha" ? "instructor" : "student",
     problems: [
       {
         id: "problem-1",

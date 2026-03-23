@@ -2,6 +2,8 @@ export type UserRole = "student" | "instructor" | "admin";
 export type ClassroomRole = "student" | "instructor";
 export type ProblemDifficulty = "easy" | "medium" | "hard";
 export type ProblemLanguage = "c" | "java" | "python";
+export type CourseLanguage = ProblemLanguage;
+export type CourseDifficulty = "beginner" | "intermediate" | "advanced";
 
 export type RequestContext = {
   requestId: string;
@@ -36,6 +38,15 @@ export type Problem = {
   difficulty: "easy" | "medium" | "hard";
   prompt: string;
   language: ProblemLanguage;
+};
+
+export type ProblemMetadata = {
+  id: string;
+  title: string;
+  difficulty: ProblemDifficulty;
+  createdAt?: string;
+  metadata?: unknown;
+  languages?: ProblemLanguage[];
 };
 
 export type ProblemTestCase = {
@@ -80,6 +91,72 @@ export type ClassroomDetail = {
   }>;
 };
 
+export type CourseTopic = {
+  id: string;
+  title: string;
+  content: string;
+  url: string | null;
+};
+
+export type CourseModule = {
+  id: string;
+  title: string;
+  description: string;
+  codelab: string | null;
+  topics: CourseTopic[];
+};
+
+export type CourseDocument = {
+  template: "v1";
+  version: number;
+  id: string;
+  title: string;
+  description: string;
+  language: CourseLanguage;
+  difficulty: CourseDifficulty;
+  modules: CourseModule[];
+};
+
+export type CourseCatalogItem = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  language: CourseLanguage | null;
+  difficulty: CourseDifficulty | null;
+  thumbnailUrl: string | null;
+  estimatedHours: number | null;
+  isPublished: boolean;
+  topicCount: number;
+  moduleCount: number;
+  progressPercent: number;
+  lastAccessedAt: string | null;
+};
+
+export type CourseTopicProgressEntry = {
+  moduleId: string;
+  topicId: string;
+  completed: boolean;
+  completedAt: string | null;
+  lastViewedAt: string | null;
+};
+
+export type CourseEnrollment = {
+  progressPercent: number;
+  startedAt: string | null;
+  lastAccessedAt: string | null;
+  completedAt: string | null;
+};
+
+export type CourseDetail = {
+  course: CourseCatalogItem & {
+    storagePath: string;
+    document: CourseDocument;
+  };
+  enrollment: CourseEnrollment | null;
+  topicProgress: CourseTopicProgressEntry[];
+};
+
 export type FlowchartData = {
   nodes: Array<{
     id: string;
@@ -93,6 +170,28 @@ export type FlowchartData = {
     source: string;
     target: string;
   }>;
+};
+
+export type VisualizationStackFrame = {
+  func_name: string;
+  line: number | null;
+  locals: Record<string, unknown>;
+};
+
+export type VisualizationStep = {
+  event: string;
+  line: number | null;
+  globals: Record<string, unknown>;
+  stack: VisualizationStackFrame[];
+  memory: Record<string, unknown>;
+  stdout: string;
+  exception: string | Record<string, unknown> | null;
+  return: unknown;
+  locals: Record<string, unknown>;
+};
+
+export type VisualizationTrace = {
+  steps: VisualizationStep[];
 };
 
 export type RunResult = {
