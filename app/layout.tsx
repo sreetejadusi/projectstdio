@@ -14,8 +14,8 @@ const jetBrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Project Stdio",
-  description: "Coding learning platform for learners and institutions",
+  title: "FrogMatrix",
+  description: "World's #1 visual learning platform",
 };
 
 export default function RootLayout({
@@ -25,7 +25,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${jetBrains.variable}`} >
+      <head>
+        <meta property="og:image" content="/meta.png" />
+      </head>
+      <body className={`${inter.variable} ${jetBrains.variable}`}>
         <TelemetryProvider>{children}</TelemetryProvider>
       </body>
     </html>
