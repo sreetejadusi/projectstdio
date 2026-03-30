@@ -62,9 +62,9 @@ function buildOpenProblems(classroomDetails: ClassroomDetail[]) {
 export function WorkspaceHub({ focus = "classrooms" }: { focus?: WorkspaceFocus }) {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [classroomDetails, setClassroomDetails] = useState<ClassroomDetail[]>([]);
-  const [selectedClassroomId, setSelectedClassroomId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const selectedClassroomId: string | null = null;
 
   useEffect(() => {
     const loadWorkspace = async () => {
@@ -123,7 +123,6 @@ export function WorkspaceHub({ focus = "classrooms" }: { focus?: WorkspaceFocus 
           focus={focus}
           loading={loading}
           selectedClassroomId={selectedClassroomId}
-          onSelectClassroom={setSelectedClassroomId}
         />
 
         <OpenProblemsFeed
