@@ -27,35 +27,7 @@ export function MonacoCodeEditor({
   onContentChange,
 }: Props) {
   const rootRef = useRef<HTMLElement | null>(null);
-
-  const handleBeforeMount: BeforeMount = (monaco) => {
-    monaco.editor.defineTheme("studio-light", {
-      base: "vs",
-      inherit: true,
-      rules: [
-        { token: "comment", foreground: "9a7b5f", fontStyle: "italic" },
-        { token: "keyword", foreground: "b45309" },
-        { token: "string", foreground: "047857" },
-        { token: "number", foreground: "c2410c" },
-        { token: "type", foreground: "9d174d" },
-      ],
-      colors: {
-        "editor.background": "#fffdfa",
-        "editor.foreground": "#221c16",
-        "editorLineNumber.foreground": "#b8a48b",
-        "editorLineNumber.activeForeground": "#7c5a34",
-        "editorGutter.background": "#fffdfa",
-        "editorIndentGuide.background1": "#efe2cf",
-        "editorIndentGuide.activeBackground1": "#d6b98d",
-        "editor.selectionBackground": "#fde7bf",
-        "editor.inactiveSelectionBackground": "#fdf1d8",
-        "editor.lineHighlightBackground": "#fff4e4",
-        "editorCursor.foreground": "#b45309",
-        "editorWhitespace.foreground": "#ead9c2",
-        "editorBracketMatch.border": "#f59e0b",
-      },
-    });
-  };
+  const handleBeforeMount: BeforeMount = () => {};
 
   const handleMount: OnMount = (editor, monaco) => {
     editor.updateOptions({
@@ -136,12 +108,12 @@ export function MonacoCodeEditor({
   }, []);
 
   return (
-    <div className="editor-shell h-full bg-[#fffdfa]">
+    <div className="editor-shell h-full bg-[#111111]">
       <Editor
         height="100%"
         defaultLanguage={LANGUAGE_MAP[language]}
         language={LANGUAGE_MAP[language]}
-        theme="studio-light"
+        theme="vs-dark"
         value={value}
         onChange={(next) => onChange(next ?? "")}
         beforeMount={handleBeforeMount}

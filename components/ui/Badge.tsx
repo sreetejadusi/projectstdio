@@ -6,10 +6,10 @@ type Props = {
 };
 
 const toneClass: Record<NonNullable<Props["tone"]>, string> = {
-  neutral: "border-[color:var(--border)] bg-white/80 text-[color:var(--text-secondary)]",
-  success: "border-[color:var(--success)]/50 bg-[color:var(--success)]/15 text-emerald-300",
-  warning: "border-[color:var(--warning)]/50 bg-[color:var(--warning)]/15 text-amber-300",
-  danger: "border-[color:var(--error)]/50 bg-[color:var(--error)]/15 text-red-300",
+  neutral: "border-[color:var(--border)] bg-[color:var(--card)] text-[color:var(--text-secondary)]",
+  success: "border-[color:var(--success)]/35 bg-[color:var(--success)]/12 text-[color:var(--text-primary)]",
+  warning: "border-[color:var(--warning)]/45 bg-[color:var(--warning)]/18 text-[#8a6b00]",
+  danger: "border-[color:var(--error)]/35 bg-[color:var(--error)]/12 text-[color:var(--error)]",
 };
 
 export function Badge({ children, tone = "neutral" }: Props) {

@@ -20,7 +20,7 @@ export default function SubmissionsPage() {
         <Card>
           <div className="overflow-hidden rounded-xl border border-[color:var(--border)]">
             <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-[#fff7eb] text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
+              <thead className="bg-[color:var(--card)] text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
                 <tr>
                   <th className="px-3 py-2">Problem</th>
                   <th className="px-3 py-2">Status</th>
@@ -31,7 +31,7 @@ export default function SubmissionsPage() {
               </thead>
               <tbody>
                 {submissions.map((submission, index) => (
-                  <tr key={`${submission.problem}-${submission.date}`} className={index % 2 === 0 ? "bg-white/70" : "bg-transparent"}>
+                  <tr key={`${submission.problem}-${submission.date}`} className={index % 2 === 0 ? "bg-[color:var(--surface)]" : "bg-transparent"}>
                     <td className="px-3 py-3">{submission.problem}</td>
                     <td className="px-3 py-3">
                       <Badge tone={submission.status === "Accepted" ? "success" : submission.status === "Wrong Answer" ? "warning" : "danger"}>

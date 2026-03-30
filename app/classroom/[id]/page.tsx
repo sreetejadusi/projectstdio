@@ -7,7 +7,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Tabs } from "@/components/ui/Tabs";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { FilledButton, RoundedButton } from "@/components/ui/Button";
 import { api } from "@/lib/api";
 import type { ClassroomDetail } from "@/lib/types";
 
@@ -38,7 +38,6 @@ export default function ClassroomPage() {
   const tabs = useMemo(
     () => [
       { id: "assigned", label: "Assigned Problems" },
-      { id: "materials", label: "Course Materials" },
       ...(data?.role === "instructor"
         ? [
             { id: "students", label: "Students" },
@@ -56,30 +55,14 @@ export default function ClassroomPage() {
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)]">Classroom</p>
             <h1 className="mt-1 text-3xl font-semibold">{data?.name ?? "Loading classroom"}</h1>
-            <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Assign coding sets, monitor submissions, and track cohort progress.</p>
           </div>
           {data?.role === "instructor" ? (
             <div className="flex gap-2">
-              <Button variant="secondary">Assign Problem Set</Button>
-              <Button>Add Deadline</Button>
+              <RoundedButton>Assign Problem Set</RoundedButton>
+              <FilledButton>Add Deadline</FilledButton>
             </div>
           ) : null}
         </header>
-
-        <section className="grid gap-3 md:grid-cols-3">
-          <Card>
-            <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">Completion rate</p>
-            <p className="mt-2 text-2xl font-semibold">74%</p>
-          </Card>
-          <Card>
-            <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">Average score</p>
-            <p className="mt-2 text-2xl font-semibold">81 / 100</p>
-          </Card>
-          <Card>
-            <p className="text-xs uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">Most difficult</p>
-            <p className="mt-2 text-sm font-semibold">Graph Shortest Path</p>
-          </Card>
-        </section>
 
         <Tabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
@@ -89,7 +72,7 @@ export default function ClassroomPage() {
           <Card title="Assigned problems">
             <div className="space-y-3">
               {data?.problems.map((problem) => (
-                <div key={problem.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[color:var(--border)] bg-white/80 p-3 shadow-[0_8px_18px_rgba(105,83,55,0.04)]">
+                <div key={problem.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3 shadow-[0_8px_18px_rgba(20,83,45,0.04)]">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{problem.title}</p>
                     <p className="mt-1 text-xs text-[color:var(--text-secondary)] line-clamp-2">{problem.prompt}</p>
@@ -98,8 +81,8 @@ export default function ClassroomPage() {
                     <Badge tone={problem.difficulty === "easy" ? "success" : problem.difficulty === "medium" ? "warning" : "danger"}>
                       {problem.difficulty}
                     </Badge>
-                    <Link className="text-xs text-[color:var(--primary-hover)]" href={`/problem/${problem.id}?classroomId=${data?.id}`}>
-                      Solve
+                    <Link href={`/problem/${problem.id}?classroomId=${data?.id}`}>
+                      <FilledButton size="sm">Solve</FilledButton>
                     </Link>
                   </div>
                 </div>
@@ -109,21 +92,11 @@ export default function ClassroomPage() {
           </Card>
         ) : null}
 
-        {!loading && activeTab === "materials" ? (
-          <Card title="Course materials">
-            <ul className="space-y-2 text-sm text-[color:var(--text-secondary)]">
-              <li>Week 1: Functions and runtime complexity</li>
-              <li>Week 2: Recursion and tree traversal</li>
-              <li>Week 3: Dynamic programming foundations</li>
-            </ul>
-          </Card>
-        ) : null}
-
         {!loading && activeTab === "students" && data?.role === "instructor" ? (
           <Card title="Students list">
             <div className="space-y-2">
               {data.students.map((student) => (
-                <div key={student.id} className="flex items-center justify-between rounded-lg border border-[color:var(--border)] bg-white/80 p-3 shadow-[0_8px_18px_rgba(105,83,55,0.04)]">
+                <div key={student.id} className="flex items-center justify-between rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3 shadow-[0_8px_18px_rgba(20,83,45,0.04)]">
                   <div>
                     <p className="text-sm font-medium">{student.name}</p>
                     <p className="text-xs text-[color:var(--text-secondary)]">{student.email}</p>
@@ -138,15 +111,15 @@ export default function ClassroomPage() {
         {!loading && activeTab === "analytics" && data?.role === "instructor" ? (
           <Card title="Instructor analytics">
             <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-3 shadow-[0_8px_18px_rgba(105,83,55,0.04)]">
+              <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3 shadow-[0_8px_18px_rgba(20,83,45,0.04)]">
                 <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">Submission velocity</p>
                 <p className="mt-2 text-lg font-semibold">+18% this week</p>
               </div>
-              <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-3 shadow-[0_8px_18px_rgba(105,83,55,0.04)]">
+              <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3 shadow-[0_8px_18px_rgba(20,83,45,0.04)]">
                 <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">Late submissions</p>
                 <p className="mt-2 text-lg font-semibold">12 students</p>
               </div>
-              <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-3 shadow-[0_8px_18px_rgba(105,83,55,0.04)]">
+              <div className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3 shadow-[0_8px_18px_rgba(20,83,45,0.04)]">
                 <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">Avg. attempts/problem</p>
                 <p className="mt-2 text-lg font-semibold">2.4</p>
               </div>

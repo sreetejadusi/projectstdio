@@ -8,14 +8,14 @@ export default function ProfilePage() {
       <div className="space-y-5">
         <header>
           <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)]">Learner Profile</p>
-          <h1 className="mt-1 text-3xl font-semibold">Sreeteja Dusi</h1>
+          <h1 className="mt-1 text-3xl font-semibold">Sree Teja Dusi</h1>
           <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Backend-leaning learner focused on systems, algorithms, and interview prep.</p>
         </header>
 
         <section className="grid gap-4 xl:grid-cols-3">
           <Card title="Profile">
             <p className="text-sm text-[color:var(--text-secondary)]">Member since: Jan 2026</p>
-            <p className="mt-1 text-sm text-[color:var(--text-secondary)]">Institution: Project Stdio University</p>
+            <p className="mt-1 text-sm text-[color:var(--text-secondary)]">Institution: FrogMatrix University</p>
           </Card>
           <Card title="Achievements" className="xl:col-span-2">
             <div className="flex flex-wrap gap-2">

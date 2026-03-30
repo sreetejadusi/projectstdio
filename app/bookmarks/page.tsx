@@ -16,7 +16,7 @@ export default function BookmarksPage() {
         <Card>
           <div className="space-y-3">
             {saved.map((title) => (
-              <div key={title} className="rounded-lg border border-[color:var(--border)] bg-white/80 p-3 shadow-[0_8px_18px_rgba(105,83,55,0.04)]">
+              <div key={title} className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3 shadow-[0_8px_18px_rgba(20,83,45,0.04)]">
                 <p className="text-sm font-medium">{title}</p>
                 <Link href="/problems" className="mt-1 inline-block text-xs text-[color:var(--primary-hover)]">Open in problems</Link>
               </div>

@@ -20,6 +20,27 @@ function stringifyValue(value: unknown) {
   }
 }
 
+function formatException(exception: VisualizationStep["exception"]) {
+  if (!exception) {
+    return null;
+  }
+
+  if (typeof exception === "string") {
+    return exception;
+  }
+
+  const type =
+    typeof exception.type === "string" && exception.type.trim().length > 0
+      ? exception.type
+      : "Exception";
+  const message =
+    typeof exception.message === "string" && exception.message.trim().length > 0
+      ? exception.message
+      : null;
+
+  return message ? `${type}: ${message}` : type;
+}
+
 function VariablesBlock({
   title,
   values,
@@ -30,14 +51,14 @@ function VariablesBlock({
   const entries = Object.entries(values);
 
   return (
-    <section className="rounded-lg border border-[color:var(--border)] bg-white p-3">
+    <section className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3">
       <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">{title}</p>
       {entries.length === 0 ? (
         <p className="mt-2 text-xs text-[color:var(--text-secondary)]">Empty</p>
       ) : (
         <div className="mt-3 space-y-2">
           {entries.map(([key, value]) => (
-            <div key={key} className="rounded-md bg-[#fff7eb] p-2">
+            <div key={key} className="rounded-md bg-[color:var(--card)] p-2">
               <p className="text-xs font-semibold text-[color:var(--text-primary)]">{key}</p>
               <pre className="mt-1 whitespace-pre-wrap font-mono text-xs text-[color:var(--text-secondary)]">
                 {stringifyValue(value)}
@@ -60,7 +81,7 @@ function CodeTraceView({
   const lines = code.split("\n");
 
   return (
-    <div className="overflow-auto rounded-lg border border-[color:var(--border)] bg-[#fffdfa]">
+    <div className="overflow-auto rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)]">
       <div className="min-w-full font-mono text-xs">
         {lines.map((line, index) => {
           const lineNumber = index + 1;
@@ -70,7 +91,7 @@ function CodeTraceView({
             <div
               key={`${lineNumber}-${line}`}
               className={`grid grid-cols-[56px_minmax(0,1fr)] border-b border-[color:var(--border)]/50 ${
-                active ? "bg-[#fde7bf]" : "bg-transparent"
+                active ? "bg-[color:var(--card)]" : "bg-transparent"
               }`}
             >
               <div className="px-3 py-1.5 text-right text-[color:var(--text-secondary)]">{lineNumber}</div>
@@ -124,6 +145,7 @@ export function ExecutionVisualizer({ language, code, testcases }: Props) {
 
   const selectedTestcase = visibleTestcases[selectedIndex] ?? null;
   const currentStep = steps[currentStepIndex] ?? null;
+  const currentException = formatException(currentStep?.exception ?? null);
 
   const handleVisualize = async () => {
     if (!selectedTestcase) {
@@ -150,19 +172,11 @@ export function ExecutionVisualizer({ language, code, testcases }: Props) {
       });
 
       const nextSteps = trace.steps ?? [];
-      const exceptionStep = nextSteps.find((step) => step.exception != null);
 
       if (nextSteps.length === 0) {
         setSteps([]);
         setCurrentStepIndex(0);
         setError("Trace is empty for this testcase.");
-        return;
-      }
-
-      if (exceptionStep) {
-        setSteps(nextSteps);
-        setCurrentStepIndex(0);
-        setError("Visualization returned an exception for this testcase.");
         return;
       }
 
@@ -179,7 +193,7 @@ export function ExecutionVisualizer({ language, code, testcases }: Props) {
 
   if (language !== "python") {
     return (
-      <div className="grid h-60 place-items-center rounded-lg border border-[color:var(--border)] bg-white/80 p-4 text-sm text-[color:var(--text-secondary)]">
+      <div className="grid h-60 place-items-center rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-sm text-[color:var(--text-secondary)]">
         Visualization is currently available for Python.
       </div>
     );
@@ -193,7 +207,7 @@ export function ExecutionVisualizer({ language, code, testcases }: Props) {
           <select
             value={selectedIndex}
             onChange={(event) => setSelectedIndex(Number(event.target.value))}
-            className="h-9 rounded-lg border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-primary)] outline-none"
+            className="h-9 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-sm text-[color:var(--text-primary)] outline-none"
           >
             {visibleTestcases.map((testcase, index) => (
               <option key={testcase.id} value={index}>
@@ -213,38 +227,47 @@ export function ExecutionVisualizer({ language, code, testcases }: Props) {
       </div>
 
       {loading ? (
-        <div className="grid h-64 place-items-center rounded-lg border border-[color:var(--border)] bg-white/80 p-4 text-sm text-[color:var(--text-secondary)]">
+        <div className="grid h-64 place-items-center rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-sm text-[color:var(--text-secondary)]">
           Building trace...
         </div>
       ) : null}
 
       {!loading && error ? (
-        <div className="grid h-64 place-items-center rounded-lg border border-[color:var(--border)] bg-white/80 p-4 text-sm text-red-400">
+        <div className="grid h-64 place-items-center rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-sm text-[color:var(--error)]">
           {error}
         </div>
       ) : null}
 
       {!loading && !error && currentStep ? (
         <>
+          {currentException ? (
+            <div className="rounded-lg border border-[color:var(--error)]/25 bg-[color:var(--surface)] p-4">
+              <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--error)]">Exception</p>
+              <pre className="mt-3 whitespace-pre-wrap rounded-md bg-[color:var(--card)] p-3 font-mono text-xs text-[color:var(--error)]">
+                {currentException}
+              </pre>
+            </div>
+          ) : null}
+
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
             <CodeTraceView code={code} activeLine={currentStep.line} />
 
             <div className="grid gap-3">
-              <section className="rounded-lg border border-[color:var(--border)] bg-white p-3">
+              <section className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3">
                 <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">Selected Input</p>
-                <pre className="mt-3 whitespace-pre-wrap rounded-md bg-[#fff7eb] p-2 font-mono text-xs text-[color:var(--text-primary)]">
+                <pre className="mt-3 whitespace-pre-wrap rounded-md bg-[color:var(--card)] p-2 font-mono text-xs text-[color:var(--text-primary)]">
                   {selectedTestcase?.input || "(empty)"}
                 </pre>
               </section>
 
-              <section className="rounded-lg border border-[color:var(--border)] bg-white p-3">
+              <section className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3">
                 <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">Stack Frames</p>
                 <div className="mt-3 space-y-3">
                   {currentStep.stack.length === 0 ? (
                     <p className="text-xs text-[color:var(--text-secondary)]">No stack frames.</p>
                   ) : (
                     currentStep.stack.map((frame, index) => (
-                      <div key={`${frame.func_name}-${index}`} className="rounded-md bg-[#fff7eb] p-3">
+                      <div key={`${frame.func_name}-${index}`} className="rounded-md bg-[color:var(--card)] p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs font-semibold text-[color:var(--text-primary)]">{frame.func_name}</p>
                           <span className="text-[11px] text-[color:var(--text-secondary)]">
@@ -267,9 +290,9 @@ export function ExecutionVisualizer({ language, code, testcases }: Props) {
           <div className="grid gap-3 xl:grid-cols-3">
             <VariablesBlock title="Locals" values={currentStep.locals} />
             <VariablesBlock title="Globals" values={currentStep.globals} />
-            <section className="rounded-lg border border-[color:var(--border)] bg-white p-3">
+            <section className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3">
               <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">Heap and Stdout</p>
-              <pre className="mt-3 whitespace-pre-wrap rounded-md bg-[#fff7eb] p-2 font-mono text-xs text-[color:var(--text-secondary)]">
+              <pre className="mt-3 whitespace-pre-wrap rounded-md bg-[color:var(--card)] p-2 font-mono text-xs text-[color:var(--text-secondary)]">
                 Heap:
                 {"\n"}
                 {Object.keys(currentStep.memory).length === 0 ? "Empty" : stringifyValue(currentStep.memory)}
@@ -315,7 +338,7 @@ export function ExecutionVisualizer({ language, code, testcases }: Props) {
       ) : null}
 
       {!loading && !error && !currentStep ? (
-        <div className="grid h-64 place-items-center rounded-lg border border-[color:var(--border)] bg-white/80 p-4 text-sm text-[color:var(--text-secondary)]">
+        <div className="grid h-64 place-items-center rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-4 text-sm text-[color:var(--text-secondary)]">
           Pick a testcase and click Visualize to inspect execution step by step.
         </div>
       ) : null}

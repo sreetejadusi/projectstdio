@@ -11,7 +11,7 @@ export function TextInput({ label, hint, className, ...props }: Props) {
       {label ? <span className="text-xs uppercase tracking-[0.16em] text-[color:var(--text-secondary)]">{label}</span> : null}
       <input
         className={[
-          "h-10 rounded-lg border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-primary)] outline-none transition placeholder:text-[color:var(--text-secondary)] focus:border-[color:var(--primary)] focus:ring-2 focus:ring-[color:var(--ring)]",
+          "h-11 rounded-full border border-[color:var(--border)] bg-[color:var(--surface)] px-4 text-sm text-[color:var(--text-primary)] outline-none transition placeholder:text-[color:var(--text-muted)] focus:border-[color:var(--primary)] focus:ring-2 focus:ring-[color:var(--ring)]",
           className || "",
         ]
           .filter(Boolean)

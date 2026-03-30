@@ -5,15 +5,18 @@ import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import type { ProblemSolveData, RunResult, SubmitResult } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
-import { Button } from "@/components/ui/Button";
+import {
+  FilledButton,
+  RoundedButton,
+  TextButton,
+} from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { MonacoCodeEditor } from "@/components/editor/MonacoCodeEditor";
-import { FlowchartPanel } from "@/components/flow/FlowchartPanel";
 import { ExecutionVisualizer } from "@/components/visualization/ExecutionVisualizer";
 import { useBehaviorTracking } from "@/hooks/useBehaviorTracking";
 
-type LeftTab = "problem" | "flowchart" | "submissions";
-type EditorTab = "testcases" | "output" | "visualization" | "console";
+type LeftTab = "description" | "submissions";
+type BottomTab = "testcases" | "results" | "visualization";
 type ExecutionUiState = "idle" | "queued" | "running" | "completed" | "timeout";
 
 function escapeHtml(value: string) {
@@ -96,26 +99,55 @@ function markdownToHtml(markdown: string) {
   return html;
 }
 
+type TestcaseCheck = {
+  id: string;
+  expectedOutput: string;
+  actualOutput: string;
+  status: "idle" | "pass" | "fail";
+};
+
+const leftTabClass = (active: boolean) =>
+  [
+    "rounded-full px-3 py-1.5 text-sm transition",
+    active
+      ? "bg-[color:var(--primary)] text-[color:var(--text-primary)]"
+      : "text-[#c7d6ca] hover:bg-white/5 hover:text-white",
+  ].join(" ");
+
+const bottomTabClass = (active: boolean) =>
+  [
+    "inline-flex items-center rounded-t-2xl border border-b-0 px-4 py-2 text-sm transition",
+    active
+      ? "border-white/10 bg-[#232323] text-white"
+      : "border-transparent bg-transparent text-[#95a39a] hover:text-white",
+  ].join(" ");
+
+function testcaseLabel(id: string, index: number) {
+  const trimmed = id.trim();
+  return trimmed.length > 0 ? trimmed : `Testcase ${index + 1}`;
+}
+
 export default function ProblemSolvePage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const tracking = useBehaviorTracking();
 
   const [problem, setProblem] = useState<ProblemSolveData | null>(null);
-  const [leftTab, setLeftTab] = useState<LeftTab>("problem");
-  const [editorTab, setEditorTab] = useState<EditorTab>("testcases");
+  const [leftTab, setLeftTab] = useState<LeftTab>("description");
+  const [bottomTab, setBottomTab] = useState<BottomTab>("testcases");
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState<"python" | "c" | "java">("python");
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
-  const [executionState, setExecutionState] = useState<ExecutionUiState>("idle");
+  const [executionState, setExecutionState] =
+    useState<ExecutionUiState>("idle");
   const [running, setRunning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editorHeight, setEditorHeight] = useState(460);
+  const [editorHeight, setEditorHeight] = useState(540);
 
   const resizeStartYRef = useRef(0);
-  const resizeStartHeightRef = useRef(460);
+  const resizeStartHeightRef = useRef(540);
   const classroomId = searchParams.get("classroomId") ?? undefined;
 
   useEffect(() => {
@@ -145,7 +177,10 @@ export default function ProblemSolvePage() {
 
     const loadLanguage = async () => {
       try {
-        const data = await api.getProblemSolveData(id, { classroomId, language });
+        const data = await api.getProblemSolveData(id, {
+          classroomId,
+          language,
+        });
         setProblem(data);
         setCode(data.baseCode || "");
         setRunResult(null);
@@ -161,7 +196,6 @@ export default function ProblemSolvePage() {
   }, [classroomId, language, params, problem]);
 
   const startResize = (event: React.MouseEvent<HTMLDivElement>) => {
-    // event.preventDefault();
     resizeStartYRef.current = event.clientY;
     resizeStartHeightRef.current = editorHeight;
 
@@ -171,8 +205,8 @@ export default function ProblemSolvePage() {
     const onMouseMove = (moveEvent: MouseEvent) => {
       const deltaY = moveEvent.clientY - resizeStartYRef.current;
       const nextHeight = Math.min(
-        Math.max(resizeStartHeightRef.current + deltaY, 320),
-        Math.floor(window.innerHeight * 0.75),
+        Math.max(resizeStartHeightRef.current + deltaY, 360),
+        Math.floor(window.innerHeight * 0.82),
       );
       setEditorHeight(nextHeight);
     };
@@ -189,7 +223,10 @@ export default function ProblemSolvePage() {
   };
 
   const visibleTestcases = useMemo(
-    () => (problem?.testcases ?? []).filter((test) => test.visibility === "visible"),
+    () =>
+      (problem?.testcases ?? []).filter(
+        (test) => test.visibility === "visible",
+      ),
     [problem],
   );
 
@@ -199,7 +236,7 @@ export default function ProblemSolvePage() {
   );
 
   const submissionOutput = useMemo(() => {
-    if (!submitResult) return "Submission has not been created yet.";
+    if (!submitResult) return "No submission created yet.";
     return [
       `Submission ID: ${submitResult.submissionId}`,
       `Language: ${submitResult.language}`,
@@ -211,27 +248,41 @@ export default function ProblemSolvePage() {
   const testcaseChecksById = useMemo(() => {
     const checks = visibleTestcases.map((test, index) => {
       const result = runResult?.result;
-      let passed = false;
+      let status: TestcaseCheck["status"] = "idle";
+      let actualOutput = "";
+
       if (runResult?.status === "completed") {
         if (result?.status === "Accepted") {
-          passed = true;
-        } else if (result?.status === "Wrong Answer" && typeof result.failedTestCase === "number") {
-          passed = index + 1 !== result.failedTestCase;
+          status = "pass";
+          actualOutput = result.got ?? "";
+        } else if (
+          result?.status === "Wrong Answer" &&
+          typeof result.failedTestCase === "number"
+        ) {
+          if (index + 1 < result.failedTestCase) {
+            status = "pass";
+          } else if (index + 1 === result.failedTestCase) {
+            status = "fail";
+            actualOutput = result.got ?? "";
+          }
         }
       }
+
       return {
         id: test.id,
         expectedOutput: test.expectedOutput,
-        actualOutput: result?.got ?? "",
-        passed,
+        actualOutput,
+        status,
       };
     });
+
     return new Map(checks.map((check) => [check.id, check]));
   }, [runResult, visibleTestcases]);
 
   const runOutput = useMemo(() => {
-    if (executionState === "timeout") return "Execution timed out after 60 seconds.";
-    if (!runResult) return "Run has not been executed yet.";
+    if (executionState === "timeout")
+      return "Execution timed out after 60 seconds.";
+    if (!runResult) return "Run code to populate testcase results.";
     if (runResult.status === "queued" || runResult.status === "running") {
       return `Execution ${runResult.status}...`;
     }
@@ -245,7 +296,9 @@ export default function ProblemSolvePage() {
       `Status: ${runResult.result.status}`,
       `Passed: ${runResult.result.passed ?? 0}/${runResult.result.total ?? 0}`,
       runResult.result.error ? `Error: ${runResult.result.error}` : null,
-      runResult.result.expected ? `Expected: ${runResult.result.expected}` : null,
+      runResult.result.expected
+        ? `Expected: ${runResult.result.expected}`
+        : null,
       runResult.result.got ? `Got: ${runResult.result.got}` : null,
     ]
       .filter(Boolean)
@@ -253,22 +306,22 @@ export default function ProblemSolvePage() {
   }, [executionState, runResult]);
 
   const statusBadge = useMemo(() => {
-    if (executionState === "queued") return { label: "Queued", tone: "warning" as const };
-    if (executionState === "running") return { label: "Running", tone: "warning" as const };
-    if (executionState === "timeout") return { label: "Timed Out", tone: "danger" as const };
-    if (runResult?.result?.status === "Accepted") return { label: "Accepted", tone: "success" as const };
+    if (executionState === "queued")
+      return { label: "Queued", tone: "warning" as const };
+    if (executionState === "running")
+      return { label: "Running", tone: "warning" as const };
+    if (executionState === "timeout")
+      return { label: "Timed Out", tone: "danger" as const };
+    if (runResult?.result?.status === "Accepted")
+      return { label: "Accepted", tone: "success" as const };
     if (runResult?.status === "completed" || runResult?.status === "failed") {
-      return { label: runResult.result?.status ?? "Error", tone: "danger" as const };
+      return {
+        label: runResult.result?.status ?? "Error",
+        tone: "danger" as const,
+      };
     }
     return { label: "Idle", tone: "neutral" as const };
   }, [executionState, runResult]);
-
-  const tabClass = (active: boolean) =>
-    `rounded-lg border px-3 py-1.5 text-sm transition ${
-      active
-        ? "border-[color:var(--primary)]/60 bg-[color:var(--primary)]/20 text-[color:var(--text-primary)]"
-        : "border-[color:var(--border)] bg-white/80 text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)]"
-    }`;
 
   const handleSubmit = async () => {
     const id = params?.id as string;
@@ -283,6 +336,7 @@ export default function ProblemSolvePage() {
     try {
       const result = await api.submitCode(id, classroomId, language, code);
       setSubmitResult(result);
+      setLeftTab("submissions");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit");
     } finally {
@@ -296,140 +350,173 @@ export default function ProblemSolvePage() {
       return;
     }
 
-    console.info("[run] step 1: preparing execution request", {
-      language,
-      testcaseCount: problem.testcases.length,
-    });
     setRunResult(null);
     setExecutionState("queued");
     setRunning(true);
     setError(null);
+    setBottomTab("results");
     tracking.recordRun();
 
     try {
-      console.info("[run] step 2: sending execute request");
-      const result = await api.runCodeWithPolling(language, code, problem.testcases, {
-        pollIntervalMs: 2000,
-        maxPollAttempts: 30,
-        onUpdate: (update) => {
-          setRunResult((prev) => ({
-            executionId: update.executionId ?? prev?.executionId,
-            language: update.language ?? prev?.language ?? language,
-            status: update.status,
-            createdAt: update.createdAt ?? prev?.createdAt,
-            progress: update.progress ?? prev?.progress,
-            result: update.result ?? prev?.result,
-            tests: [],
-          }));
-          if (update.status === "queued") setExecutionState("queued");
-          if (update.status === "running") setExecutionState("running");
-          if (update.status === "completed" || update.status === "failed") setExecutionState("completed");
+      const result = await api.runCodeWithPolling(
+        language,
+        code,
+        problem.testcases,
+        {
+          pollIntervalMs: 2000,
+          maxPollAttempts: 30,
+          onUpdate: (update) => {
+            setRunResult((prev) => ({
+              executionId: update.executionId ?? prev?.executionId,
+              language: update.language ?? prev?.language ?? language,
+              status: update.status,
+              createdAt: update.createdAt ?? prev?.createdAt,
+              progress: update.progress ?? prev?.progress,
+              result: update.result ?? prev?.result,
+              tests: [],
+            }));
+            if (update.status === "queued") setExecutionState("queued");
+            if (update.status === "running") setExecutionState("running");
+            if (update.status === "completed" || update.status === "failed")
+              setExecutionState("completed");
+          },
         },
-      });
-      console.info("[run] step 3: execution result received", {
-        executionId: result.executionId,
-        status: result.status,
-        verdict: result.result?.status,
-      });
+      );
+
       setRunResult(result);
       const total = result.result?.total ?? problem.testcases.length;
       const passed = result.result?.passed ?? 0;
       const failureCount = Math.max(total - passed, 0);
       if (failureCount > 0) {
-        console.info("[run] step 4: recording test failures", { failureCount });
         tracking.recordTestFailure(failureCount);
       }
     } catch (err) {
-      console.error("[run] failed", err);
       const message = err instanceof Error ? err.message : "Failed to run code";
       if (message.includes("timed out")) {
         setExecutionState("timeout");
       }
       setError(message);
     } finally {
-      console.info("[run] step 5: run flow finished");
       setRunning(false);
     }
   };
 
   return (
-    <AppShell hideFooter hideSidebar>
-      <div className="space-y-4">
-        <header className="rounded-xl border border-[color:var(--border)] bg-[linear-gradient(135deg,#fff8eb,#fff2f0_45%,#fff9f2)] p-4 shadow-[0_12px_28px_rgba(105,83,55,0.06)]">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)]">Problem Workspace</p>
-              <h1 className="mt-1 text-2xl font-semibold">{problem?.title ?? "Loading problem"}</h1>
-              <p className="mt-1 text-sm text-[color:var(--text-secondary)]">
-                {classroomId ? `Classroom: ${classroomId}` : "Open inside classroom context to enable graded submission."}
-              </p>
-              {error ? <p className="mt-2 text-sm text-red-300">{error}</p> : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {problem ? (
-                <Badge tone={problem.difficulty === "easy" ? "success" : problem.difficulty === "medium" ? "warning" : "danger"}>
-                  {problem.difficulty}
-                </Badge>
-              ) : null}
-              <Badge tone="neutral">{language.toUpperCase()}</Badge>
-              <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
-            </div>
+    <AppShell hideFooter fullBleed>
+      <div className="grid min-h-[calc(100vh-60px)] grid-cols-1 bg-[#111111] text-white xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <section className="flex min-h-[calc(100vh-60px)] flex-col border-r border-white/8 bg-[#1a1a1a]">
+          <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3">
+            <button
+              type="button"
+              className={leftTabClass(leftTab === "description")}
+              onClick={() => setLeftTab("description")}
+            >
+              Description
+            </button>
+            <button
+              type="button"
+              className={leftTabClass(leftTab === "submissions")}
+              onClick={() => setLeftTab("submissions")}
+            >
+              Submissions
+            </button>
           </div>
-        </header>
 
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <section className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-white/80 shadow-[0_10px_24px_rgba(105,83,55,0.04)]">
-            <div className="flex flex-wrap gap-2 border-b border-[color:var(--border)] p-3">
-              <button type="button" className={tabClass(leftTab === "problem")} onClick={() => setLeftTab("problem")}>Problem</button>
-              <button type="button" className={tabClass(leftTab === "flowchart")} onClick={() => setLeftTab("flowchart")}>Flowchart</button>
-              <button type="button" className={tabClass(leftTab === "submissions")} onClick={() => setLeftTab("submissions")}>Submissions</button>
-            </div>
+          {leftTab === "description" ? (
+            <div className="app-scrollbar flex-1 overflow-auto px-5 py-5">
+              <div className="mx-auto max-w-4xl space-y-5">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {problem ? (
+                      <Badge
+                        tone={
+                          problem.difficulty === "easy"
+                            ? "success"
+                            : problem.difficulty === "medium"
+                              ? "warning"
+                              : "danger"
+                        }
+                      >
+                        {problem.difficulty}
+                      </Badge>
+                    ) : null}
+                    <Badge tone="neutral">{language.toUpperCase()}</Badge>
+                    <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
+                  </div>
+                  <h1 className="text-3xl font-semibold text-white">
+                    {problem?.title ?? "Loading problem"}
+                  </h1>
+                  {classroomId ? (
+                    <p className="text-sm text-[#a8b7ad]">
+                      Classroom context active.
+                    </p>
+                  ) : null}
+                  {error ? (
+                    <p className="text-sm text-[#f87171]">{error}</p>
+                  ) : null}
+                </div>
 
-            {leftTab === "problem" ? (
-              <div className="app-scrollbar max-h-[calc(100vh-300px)] space-y-4 overflow-auto p-4">
                 <article
-                  className="rounded-lg border border-[color:var(--border)] bg-white/80 p-4 text-sm
-                  [&_h1]:mb-2 [&_h1]:text-xl [&_h2]:mb-2 [&_h2]:text-lg [&_h3]:mb-2 [&_h3]:text-base
-                  [&_p]:mb-2 [&_pre]:mb-2 [&_pre]:overflow-auto [&_pre]:rounded-lg [&_pre]:bg-[#fff7eb] [&_pre]:p-3
-                  [&_ul]:mb-2 [&_ul]:list-disc [&_ul]:pl-6 [&_code]:font-mono"
+                  className="rounded-[28px] border border-white/8 bg-[#202020] p-6 text-[15px] leading-7 text-[#e8efe9]
+                  [&_h1]:mb-3 [&_h1]:text-2xl [&_h2]:mb-3 [&_h2]:text-xl [&_h3]:mb-2 [&_h3]:text-lg
+                  [&_p]:mb-4 [&_pre]:mb-4 [&_pre]:overflow-auto [&_pre]:rounded-2xl [&_pre]:bg-[#171717] [&_pre]:p-4
+                  [&_ul]:mb-4 [&_ul]:list-disc [&_ul]:pl-6 [&_code]:font-mono [&_code]:text-[#8de0a8]"
                   dangerouslySetInnerHTML={{ __html: renderedDescription }}
                 />
-                <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-4">
-                  <h3 className="mb-2 text-xs uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">Constraints</h3>
-                  <p className="text-sm text-[color:var(--text-secondary)]">{problem?.constraints || "No constraints provided."}</p>
-                </div>
-              </div>
-            ) : leftTab === "flowchart" ? (
-              <div className="h-[calc(100vh-300px)] p-4">
-                <FlowchartPanel data={problem?.flowchart ?? null} />
-              </div>
-            ) : (
-              <div className="app-scrollbar max-h-[calc(100vh-300px)] space-y-4 overflow-auto p-4">
-                <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-4">
-                  <h3 className="mb-2 text-xs uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">Submission</h3>
-                  <pre className="whitespace-pre-wrap font-mono text-xs text-[color:var(--text-secondary)]">{submissionOutput}</pre>
-                </div>
-                <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-4">
-                  <h3 className="mb-2 text-xs uppercase tracking-[0.14em] text-[color:var(--text-secondary)]">Run Result</h3>
-                  <pre className="whitespace-pre-wrap font-mono text-xs text-[color:var(--text-secondary)]">{runOutput}</pre>
-                </div>
-              </div>
-            )}
-          </section>
 
-          <section className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-white/80 shadow-[0_10px_24px_rgba(105,83,55,0.04)]">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[color:var(--border)] p-3">
-              <div>
-                <h2 className="text-lg font-semibold">Code Editor</h2>
-                <p className="text-xs text-[color:var(--text-secondary)]">VS Code style workspace with run and submit actions.</p>
+                <div className="rounded-[24px] border border-white/8 bg-[#202020] p-5">
+                  <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[#8ca097]">
+                    Constraints
+                  </p>
+                  <pre className="whitespace-pre-wrap font-mono text-sm text-[#d8e2db]">
+                    {problem?.constraints || "No constraints provided."}
+                  </pre>
+                </div>
               </div>
-              <label className="grid gap-1 text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">
+            </div>
+          ) : (
+            <div className="app-scrollbar flex-1 overflow-auto px-5 py-5">
+              <div className="mx-auto max-w-4xl space-y-4">
+                <div className="rounded-[24px] border border-white/8 bg-[#202020] p-5">
+                  <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[#8ca097]">
+                    Submission
+                  </p>
+                  <pre className="whitespace-pre-wrap font-mono text-sm text-[#d8e2db]">
+                    {submissionOutput}
+                  </pre>
+                </div>
+                <div className="rounded-[24px] border border-white/8 bg-[#202020] p-5">
+                  <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[#8ca097]">
+                    Execution
+                  </p>
+                  <pre className="whitespace-pre-wrap font-mono text-sm text-[#d8e2db]">
+                    {runOutput}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="flex min-h-[calc(100vh-60px)] flex-col bg-[#111111]">
+          <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+            <div className="space-y-1">
+              <p className="text-lg font-semibold text-white">Code</p>
+              <p className="text-xs text-[#8ca097]">
+                Write, run, and submit from the same workspace.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="grid gap-1 text-[9px] uppercase tracking-[0.14em] text-[#8ca097]">
                 Language
                 <select
                   id="language"
                   value={language}
-                  onChange={(event) => setLanguage(event.target.value as "python" | "c" | "java")}
-                  className="h-9 rounded-lg border border-[color:var(--border)] bg-white px-3 text-sm text-[color:var(--text-primary)] outline-none"
+                  onChange={(event) =>
+                    setLanguage(event.target.value as "python" | "c" | "java")
+                  }
+                  className="h-8 rounded-xl border border-white/10 bg-[#1d1d1d] px-3 text-xs text-white outline-none"
                 >
                   {(problem?.languages || []).map((option) => (
                     <option key={option} value={option}>
@@ -438,70 +525,145 @@ export default function ProblemSolvePage() {
                   ))}
                 </select>
               </label>
-            </div>
-
-            <div className="overflow-hidden border-y border-[color:var(--border)]" style={{ height: `${editorHeight}px` }}>
-              <MonacoCodeEditor
-                language={language}
-                value={code}
-                onChange={setCode}
-                onKeystroke={(timestamp) => tracking.recordKeystroke(timestamp)}
-                onPasteAttempt={() => tracking.recordPasteAttempt()}
-                onContentChange={(length) => tracking.recordContentChange(length)}
-              />
-            </div>
-
-            <div
-              className="h-2 cursor-ns-resize border-y border-[color:var(--primary)]/40 bg-gradient-to-r from-[color:var(--primary)]/10 via-[color:var(--success)]/10 to-[color:var(--primary)]/10"
-              onMouseDown={startResize}
-              role="separator"
-              aria-label="Resize editor"
-            />
-
-            <div className="flex flex-wrap justify-end gap-2 border-b border-[color:var(--border)] p-3">
-              <Button onClick={handleRun} disabled={running || submitting}>
+              <FilledButton
+                onClick={handleRun}
+                disabled={running || submitting}
+                size="sm"
+                className="border-white/10 bg-[#191919] text-white hover:border-[#22c55e] hover:text-[#22c55e]"
+              >
                 {running ? "Running..." : "Run"}
-              </Button>
-              <Button variant="secondary" onClick={handleSubmit} disabled={submitting}>
+              </FilledButton>
+              <RoundedButton
+                onClick={handleSubmit}
+                disabled={submitting}
+                size="sm"
+                className="text-[#0f1b12]"
+              >
                 {submitting ? "Submitting..." : "Submit"}
-              </Button>
+              </RoundedButton>
             </div>
+          </div>
 
-            <div className="p-3">
-              <div className="mb-3 flex flex-wrap gap-2">
-                <button type="button" className={tabClass(editorTab === "testcases")} onClick={() => setEditorTab("testcases")}>Testcases</button>
-                <button type="button" className={tabClass(editorTab === "output")} onClick={() => setEditorTab("output")}>Output</button>
-                <button type="button" className={tabClass(editorTab === "visualization")} onClick={() => setEditorTab("visualization")}>Visualization</button>
-                <button type="button" className={tabClass(editorTab === "console")} onClick={() => setEditorTab("console")}>Console</button>
-              </div>
+          <div
+            className="border-b border-white/8"
+            style={{ height: `${editorHeight}px` }}
+          >
+            <MonacoCodeEditor
+              language={language}
+              value={code}
+              onChange={setCode}
+              onKeystroke={(timestamp) => tracking.recordKeystroke(timestamp)}
+              onPasteAttempt={() => tracking.recordPasteAttempt()}
+              onContentChange={(length) => tracking.recordContentChange(length)}
+            />
+          </div>
 
-              {editorTab === "testcases" ? (
-                <div className="app-scrollbar max-h-60 space-y-2 overflow-auto">
-                  {visibleTestcases.map((test) => (
-                    <div key={test.id} className="rounded-lg border border-[color:var(--border)] bg-white/80 p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-xs uppercase tracking-[0.12em] text-[color:var(--text-secondary)]">{test.id}</p>
-                        {runResult?.status === "completed" ? (
-                          <Badge tone={testcaseChecksById.get(test.id)?.passed ? "success" : "danger"}>
-                            {testcaseChecksById.get(test.id)?.passed ? "Pass" : "Fail"}
-                          </Badge>
-                        ) : null}
+          <div
+            className="h-2 cursor-ns-resize bg-[#171717]"
+            onMouseDown={startResize}
+            role="separator"
+            aria-label="Resize editor"
+          />
+
+          <div className="flex min-h-0 flex-1 flex-col justify-end bg-[#121212]">
+            <div className="app-scrollbar min-h-[220px] flex-1 overflow-auto border-t border-white/8 bg-[#1a1a1a] px-4 py-4">
+              {bottomTab === "testcases" ? (
+                <div className="space-y-3">
+                  {visibleTestcases.map((test, index) => {
+                    const result = testcaseChecksById.get(test.id);
+                    return (
+                      <div
+                        key={test.id}
+                        className="rounded-2xl border border-white/8 bg-[#222222] p-4"
+                      >
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium text-white">
+                            {testcaseLabel(test.id, index)}
+                          </p>
+                          {result?.status === "pass" ? (
+                            <Badge tone="success">Pass</Badge>
+                          ) : null}
+                          {result?.status === "fail" ? (
+                            <Badge tone="danger">Fail</Badge>
+                          ) : null}
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#8ca097]">
+                              Input
+                            </p>
+                            <pre className="whitespace-pre-wrap rounded-xl bg-[#171717] p-3 font-mono text-xs text-[#dbe7dd]">
+                              {test.input || "(empty)"}
+                            </pre>
+                          </div>
+                          <div>
+                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#8ca097]">
+                              Expected Output
+                            </p>
+                            <pre className="whitespace-pre-wrap rounded-xl bg-[#171717] p-3 font-mono text-xs text-[#dbe7dd]">
+                              {test.expectedOutput || "(empty)"}
+                            </pre>
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-xs text-[color:var(--text-secondary)]">Input: {test.input || "(empty)"}</p>
-                      <p className="mt-1 text-xs text-[color:var(--text-secondary)]">Expected: {test.expectedOutput || "(empty)"}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : null}
 
-              {editorTab === "output" ? (
-                <pre className="app-scrollbar max-h-60 overflow-auto rounded-lg border border-[color:var(--border)] bg-white/80 p-3 font-mono text-xs text-[color:var(--text-secondary)]">
-                  {runOutput}
-                </pre>
+              {bottomTab === "results" ? (
+                <div className="space-y-3">
+                  {visibleTestcases.map((test, index) => {
+                    const result = testcaseChecksById.get(test.id);
+                    return (
+                      <div
+                        key={`${test.id}-result`}
+                        className="rounded-2xl border border-white/8 bg-[#222222] p-4"
+                      >
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium text-white">
+                            {testcaseLabel(test.id, index)}
+                          </p>
+                          {result?.status === "pass" ? (
+                            <Badge tone="success">Pass</Badge>
+                          ) : null}
+                          {result?.status === "fail" ? (
+                            <Badge tone="danger">Fail</Badge>
+                          ) : null}
+                          {result?.status === "idle" ? (
+                            <Badge tone="neutral">Pending</Badge>
+                          ) : null}
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#8ca097]">
+                              Expected
+                            </p>
+                            <pre className="whitespace-pre-wrap rounded-xl bg-[#171717] p-3 font-mono text-xs text-[#dbe7dd]">
+                              {result?.expectedOutput ||
+                                test.expectedOutput ||
+                                "(empty)"}
+                            </pre>
+                          </div>
+                          <div>
+                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#8ca097]">
+                              Actual
+                            </p>
+                            <pre className="whitespace-pre-wrap rounded-xl bg-[#171717] p-3 font-mono text-xs text-[#dbe7dd]">
+                              {result?.status === "idle"
+                                ? "Run code to view testcase output."
+                                : result?.actualOutput || "(empty)"}
+                            </pre>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               ) : null}
 
-              {editorTab === "visualization" ? (
-                <div className="rounded-lg border border-[color:var(--border)] bg-white/80 p-3">
+              {bottomTab === "visualization" ? (
+                <div className="rounded-2xl border border-white/8 bg-[#222222] p-4">
                   <ExecutionVisualizer
                     language={language}
                     code={code}
@@ -509,15 +671,41 @@ export default function ProblemSolvePage() {
                   />
                 </div>
               ) : null}
-
-              {editorTab === "console" ? (
-                <pre className="app-scrollbar max-h-60 overflow-auto rounded-lg border border-[color:var(--border)] bg-white/80 p-3 font-mono text-xs text-[color:var(--text-secondary)]">
-                  {runResult?.progress?.output || runResult?.result?.error || "Console logs will appear here after run."}
-                </pre>
-              ) : null}
             </div>
-          </section>
-        </div>
+
+            <div className="flex flex-wrap sticky bottom-0 items-center gap-2 border-t border-white/8 bg-[#151515] px-4 pt-3">
+              <button
+                type="button"
+                className={bottomTabClass(bottomTab === "testcases")}
+                onClick={() => setBottomTab("testcases")}
+              >
+                Testcases
+              </button>
+              <button
+                type="button"
+                className={bottomTabClass(bottomTab === "results")}
+                onClick={() => setBottomTab("results")}
+              >
+                Test Results
+              </button>
+              <button
+                type="button"
+                className={bottomTabClass(bottomTab === "visualization")}
+                onClick={() => setBottomTab("visualization")}
+              >
+                Visualization
+              </button>
+              <div className="ml-auto pb-2">
+                <TextButton
+                  size="sm"
+                  className="text-[#8ca097] hover:bg-white/5 hover:text-white"
+                >
+                  {statusBadge.label}
+                </TextButton>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
     </AppShell>
   );

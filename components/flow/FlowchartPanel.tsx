@@ -29,22 +29,22 @@ const FlowNode = memo(({ data }: NodeProps<FlowNodeData>) => {
     <div
       className={`min-w-44 rounded-2xl border px-4 py-3 shadow-[0_14px_28px_rgba(105,83,55,0.12)] backdrop-blur ${
         data.isHovered
-          ? "border-amber-300 bg-gradient-to-b from-amber-200/90 to-orange-200/80 shadow-[0_0_0_2px_rgba(251,191,36,0.35),0_18px_34px_rgba(105,83,55,0.18)]"
+          ? "border-[color:var(--primary)] bg-gradient-to-b from-[color:var(--card)] to-[color:var(--surface)] shadow-[0_0_0_2px_rgba(34,197,94,0.2),0_18px_34px_rgba(20,83,45,0.18)]"
           : data.status === "matched"
-            ? "border-emerald-300/70 bg-gradient-to-b from-emerald-100/90 to-emerald-50/90"
-            : "border-[color:var(--border)] bg-gradient-to-b from-white/95 to-[#fff7eb]/95"
+            ? "border-[color:var(--success)]/70 bg-gradient-to-b from-[color:var(--card)] to-[color:var(--surface)]"
+            : "border-[color:var(--border)] bg-gradient-to-b from-[color:var(--surface)] to-[color:var(--card)]"
       }`}
     >
       <Handle
         type="target"
         position={Position.Top}
-        className="!h-2.5 !w-2.5 !border !border-amber-300 !bg-amber-400"
+        className="!h-2.5 !w-2.5 !border !border-[color:var(--primary)] !bg-[color:var(--primary)]"
       />
       <div className="text-center text-xs font-semibold tracking-wide text-[color:var(--text-primary)]">{data.label}</div>
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!h-2.5 !w-2.5 !border !border-amber-300 !bg-amber-400"
+        className="!h-2.5 !w-2.5 !border !border-[color:var(--primary)] !bg-[color:var(--primary)]"
       />
     </div>
   );
@@ -201,13 +201,13 @@ export function FlowchartPanel({ data }: Props) {
       selectable: false,
       style: {
         stroke:
-          hoveredNodeId === edge.source || hoveredNodeId === edge.target ? "#f59e0b" : "#fbbf24",
+          hoveredNodeId === edge.source || hoveredNodeId === edge.target ? "#22c55e" : "#6fcf8d",
         strokeOpacity: hoveredNodeId ? 0.9 : 0.7,
         strokeWidth: hoveredNodeId === edge.source || hoveredNodeId === edge.target ? 3 : 2,
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        color: hoveredNodeId === edge.source || hoveredNodeId === edge.target ? "#f59e0b" : "#fbbf24",
+        color: hoveredNodeId === edge.source || hoveredNodeId === edge.target ? "#22c55e" : "#6fcf8d",
         width: 18,
         height: 18,
       },
@@ -216,14 +216,14 @@ export function FlowchartPanel({ data }: Props) {
 
   if (!data) {
     return (
-      <div className="grid h-full min-h-64 place-items-center rounded-2xl border border-dashed border-[color:var(--border)] bg-[#fff7eb] text-sm text-[color:var(--text-secondary)]">
+      <div className="grid h-full min-h-64 place-items-center rounded-2xl border border-dashed border-[color:var(--border)] bg-[color:var(--surface)] text-sm text-[color:var(--text-secondary)]">
         <p>No flowchart available yet.</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full min-h-64 overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[radial-gradient(circle_at_20%_20%,rgba(251,191,36,0.18),transparent_45%),radial-gradient(circle_at_80%_75%,rgba(244,114,182,0.12),transparent_45%),linear-gradient(180deg,#fffdfa,#fff4e5)]">
+    <div className="h-full min-h-64 overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[radial-gradient(circle_at_20%_20%,rgba(34,197,94,0.12),transparent_45%),radial-gradient(circle_at_80%_75%,rgba(52,208,108,0.08),transparent_45%),linear-gradient(180deg,var(--surface),var(--card))]">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -245,9 +245,9 @@ export function FlowchartPanel({ data }: Props) {
       >
         <Controls
           showInteractive={false}
-          className="[&>button]:!h-8 [&>button]:!w-8 [&>button]:!border-[color:var(--border)] [&>button]:!bg-white [&>button]:!text-[color:var(--text-primary)] [&>button:hover]:!bg-[#fff7eb]"
+          className="[&>button]:!h-8 [&>button]:!w-8 [&>button]:!border-[color:var(--border)] [&>button]:!bg-[color:var(--card)] [&>button]:!text-[color:var(--text-primary)] [&>button:hover]:!bg-[color:var(--surface)]"
         />
-        <Background color="rgba(217, 119, 6, 0.18)" gap={22} size={1} />
+        <Background color="rgba(34, 197, 94, 0.18)" gap={22} size={1} />
       </ReactFlow>
     </div>
   );

@@ -68,7 +68,7 @@ export default function AuthPage() {
     <div className="min-h-screen px-4 py-6 md:px-8">
       <div className="mx-auto grid w-full max-w-5xl gap-4 lg:grid-cols-2">
         <section className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-6 shadow-[0_18px_40px_rgba(105,83,55,0.08)]">
-          <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)]">Project Stdio</p>
+          <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)]">FrogMatrix</p>
           <h1 className="mt-2 text-3xl font-semibold">{mode === "login" ? "Welcome back" : "Create your account"}</h1>
           <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Secure coding workspace for learners and instructors.</p>
 
@@ -94,7 +94,7 @@ export default function AuthPage() {
           <p className="mt-2 text-sm text-[color:var(--text-secondary)]">LeetCode-style practice, course progression, classroom analytics, and code visualization in one platform.</p>
           <div className="mt-5 space-y-2 text-sm text-[color:var(--text-secondary)]">
             <p>• Problem solving with live runtime feedback</p>
-            <p>• Structured curriculum and learning paths</p>
+            <p>• Structured curriculum with guided modules</p>
             <p>• Instructor analytics for cohorts</p>
             <p>• Built-in debugger and flow visualization</p>
           </div>
