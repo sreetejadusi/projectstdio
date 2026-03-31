@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
+import { FilledButton, RoundedButton } from "@/components/ui/Button";
 import { TextInput } from "@/components/ui/TextInput";
-import { Footer } from "@/components/layout/Footer";
-import { ApiHttpError, fetchApi } from "@/lib/utils/http";
+import { fetchApi } from "@/lib/utils/http";
 
 type LoginData = {
   userId: string;
@@ -14,10 +12,14 @@ type LoginData = {
   organizationId?: string;
 };
 
-type RegisterData = {
+type RegisterData = LoginData;
+
+const GITAM_EMAIL_PATTERN = /^[^@\s]+@([a-z0-9-]+\.)*gitam\.(edu|in)$/i;
+
+type SessionData = {
   userId: string;
-  email: string;
-  requiresEmailConfirmation: boolean;
+  role: "student" | "instructor" | "admin";
+  organizationId?: string;
 };
 
 export default function AuthPage() {
@@ -27,24 +29,31 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ fullName: "", email: "", password: "" });
 
+  const validateEmail = (email: string) =>
+    GITAM_EMAIL_PATTERN.test(email.trim().toLowerCase());
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
     setError(null);
 
     try {
+      if (!validateEmail(form.email)) {
+        throw new Error(
+          "Use your GITAM email address (*.gitam.edu or *.gitam.in).",
+        );
+      }
+
       if (mode === "login") {
-        const session = await fetchApi<LoginData>("/api/auth/login", {
+        await fetchApi<LoginData>("/api/auth/login", {
           method: "POST",
           body: JSON.stringify({ email: form.email, password: form.password }),
         });
-        window.localStorage.setItem("frogmatrix-user-id", session.userId);
-        window.localStorage.setItem("frogmatrix-user-role", session.role);
         router.push("/dashboard");
         return;
       }
 
-      const registered = await fetchApi<RegisterData>("/api/auth/register", {
+      await fetchApi<RegisterData>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
           fullName: form.fullName,
@@ -53,58 +62,155 @@ export default function AuthPage() {
           role: "student",
         }),
       });
-      window.localStorage.setItem("frogmatrix-user-id", registered.userId);
 
-      router.push(`/auth/confirmation?email=${encodeURIComponent(form.email)}`);
+      router.push("/dashboard");
     } catch (err) {
-      if (err instanceof ApiHttpError && err.code === "EMAIL_NOT_VERIFIED") {
-        router.push(`/auth/confirmation?email=${encodeURIComponent(form.email)}`);
-        return;
-      }
       setError(err instanceof Error ? err.message : "Request failed");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleDemoSessionCheck = useCallback(async () => {
+    try {
+      await fetchApi<SessionData>("/api/auth/session");
+      router.push("/dashboard");
+    } catch {
+      // no-op, used only to surface cookie-backed login state if present
+    }
+  }, [router]);
+
+  useEffect(() => {
+    void handleDemoSessionCheck();
+  }, [handleDemoSessionCheck]);
+
   return (
-    <div className="min-h-screen px-4 py-6 md:px-8">
-      <div className="mx-auto grid w-full max-w-5xl gap-4 lg:grid-cols-2">
-        <section className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-6 shadow-[0_18px_40px_rgba(105,83,55,0.08)]">
-          <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-secondary)]">FrogMatrix</p>
-          <h1 className="mt-2 text-3xl font-semibold">{mode === "login" ? "Welcome back" : "Create your account"}</h1>
-          <p className="mt-2 text-sm text-[color:var(--text-secondary)]">Secure coding workspace for learners and instructors.</p>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.16),transparent_28%),linear-gradient(180deg,rgba(243,251,245,0.92),rgba(207,238,214,1))] px-4 py-6 dark:bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.12),transparent_24%),linear-gradient(180deg,#101612,#0b100d)] md:px-8">
+      <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-hidden rounded-[32px] border border-[color:var(--border)] bg-[color:var(--surface)] shadow-[0_30px_80px_rgba(20,83,45,0.12)] dark:bg-[color:var(--surface)] lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="relative flex flex-col justify-between overflow-hidden border-b border-[color:var(--border)] bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.18),transparent_32%),linear-gradient(160deg,#effcf2,#dbf5e3_55%,#f6fff7)] p-8 dark:border-r dark:border-b-0 dark:bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.2),transparent_30%),linear-gradient(160deg,#102017,#0d1711_55%,#14221a)] md:p-10">
+          <div>
+            <img src="/logo.svg" alt="" className="w-1/3" />
 
-          <div className="mt-5 flex gap-2 rounded-xl border border-[color:var(--border)] bg-white/80 p-1 shadow-[0_8px_18px_rgba(105,83,55,0.05)]">
-            <button type="button" className={`flex-1 rounded-lg px-3 py-2 text-sm ${mode === "login" ? "bg-[color:var(--primary)] text-white" : "text-[color:var(--text-secondary)]"}`} onClick={() => setMode("login")}>Login</button>
-            <button type="button" className={`flex-1 rounded-lg px-3 py-2 text-sm ${mode === "signup" ? "bg-[color:var(--primary)] text-white" : "text-[color:var(--text-secondary)]"}`} onClick={() => setMode("signup")}>Sign Up</button>
+            <div className="mt-10 max-w-xl">
+              <h1 className="mt-4 text-5xl font-semibold tracking-[-0.04em] text-[color:var(--text-primary)] dark:text-white">
+                Learn, solve, and upskill code in one focused workspace.
+              </h1>
+              <p className="mt-5 max-w-lg text-base leading-7 text-[color:var(--text-secondary)]">
+                Built for programmers. Access assignments, solve coding
+                problems, visualize execution, and keep your entire learning
+                loop in a single professional interface.
+              </p>
+            </div>
           </div>
 
-          <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
-            {mode === "signup" ? (
-              <TextInput label="Full name" value={form.fullName} onChange={(event) => setForm((prev) => ({ ...prev, fullName: event.target.value }))} placeholder="Ada Lovelace" required />
-            ) : null}
-            <TextInput label="Email" type="email" value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} placeholder="you@school.edu" required />
-            <TextInput label="Password" type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} placeholder="••••••••" required />
-            {mode === "login" ? <Link href="/auth/forgot-password" className="inline-block text-xs text-[color:var(--primary-hover)]">Forgot password?</Link> : null}
-            {error ? <p className="text-sm text-red-300">{error}</p> : null}
-            <Button type="submit" full disabled={loading}>{loading ? "Working..." : mode === "login" ? "Login" : "Create account"}</Button>
-          </form>
-        </section>
-
-        <section className="rounded-2xl border border-[color:var(--border)] bg-[radial-gradient(circle_at_10%_0%,rgba(251,191,36,0.25),transparent_40%),linear-gradient(160deg,#fff8eb,#fff2f0_48%,#fffaf3)] p-6 shadow-[0_18px_40px_rgba(105,83,55,0.08)]">
-          <h2 className="text-2xl font-semibold">Developer-first learning</h2>
-          <p className="mt-2 text-sm text-[color:var(--text-secondary)]">LeetCode-style practice, course progression, classroom analytics, and code visualization in one platform.</p>
-          <div className="mt-5 space-y-2 text-sm text-[color:var(--text-secondary)]">
-            <p>• Problem solving with live runtime feedback</p>
-            <p>• Structured curriculum with guided modules</p>
-            <p>• Instructor analytics for cohorts</p>
-            <p>• Built-in debugger and flow visualization</p>
+          <div className="mt-10 grid gap-4 sm:grid-cols-3">
+            {[
+              "Structured classrooms and assignments",
+              "Live problem solving with execution tracing",
+              "Structured courses and learning paths for all skill levels",
+            ].map((item) => (
+              <div
+                key={item}
+                className="rounded-[24px] border border-[color:var(--border)] bg-white/70 p-4 text-sm leading-6 text-[color:var(--text-secondary)] shadow-[0_12px_30px_rgba(20,83,45,0.06)] dark:bg-white/5"
+              >
+                {item}
+              </div>
+            ))}
           </div>
         </section>
-      </div>
-      <div className="mx-auto mt-4 w-full max-w-5xl">
-        <Footer />
+
+        <section className="flex items-center justify-center bg-[color:var(--surface)] p-6 md:p-8">
+          <div className="w-full max-w-md rounded-[28px] border border-[color:var(--border)] bg-[color:var(--card)] p-6 shadow-[0_22px_50px_rgba(20,83,45,0.08)] dark:bg-[color:var(--card)]">
+            <div className="flex gap-2 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-1">
+              <button
+                type="button"
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-medium transition ${
+                  mode === "login"
+                    ? "bg-[color:var(--primary)] text-white"
+                    : "text-[color:var(--text-secondary)]"
+                }`}
+                onClick={() => setMode("login")}
+              >
+                Login
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-medium transition ${
+                  mode === "signup"
+                    ? "bg-[color:var(--primary)] text-white"
+                    : "text-[color:var(--text-secondary)]"
+                }`}
+                onClick={() => setMode("signup")}
+              >
+                Register
+              </button>
+            </div>
+
+            <div className="mt-6">
+              <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[color:var(--text-primary)]">
+                {mode === "login" ? "Welcome back" : "Create your account"}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[color:var(--text-secondary)]">
+                {mode === "login"
+                  ? "Sign in to continue to your classrooms, coding workspace, and submissions."
+                  : "Register with your email to access classrooms, problem solving, and course work."}
+              </p>
+            </div>
+
+            <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+              {mode === "signup" ? (
+                <TextInput
+                  label="Full name"
+                  value={form.fullName}
+                  onChange={(event) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      fullName: event.target.value,
+                    }))
+                  }
+                  placeholder="Your full name"
+                  required
+                />
+              ) : null}
+              <TextInput
+                label="Email"
+                type="email"
+                value={form.email}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, email: event.target.value }))
+                }
+                placeholder="name@email.com"
+                required
+              />
+              <TextInput
+                label="Password"
+                type="password"
+                value={form.password}
+                onChange={(event) =>
+                  setForm((prev) => ({ ...prev, password: event.target.value }))
+                }
+                placeholder="Minimum 8 characters"
+                required
+              />
+
+              {error ? (
+                <div className="rounded-2xl border border-[color:var(--error)]/30 bg-[color:var(--error)]/10 px-4 py-3 text-sm text-[color:var(--error)]">
+                  {error}
+                </div>
+              ) : null}
+
+              <div className="flex items-center gap-3 pt-2">
+                <FilledButton type="submit" full disabled={loading}>
+                  {loading
+                    ? "Please wait..."
+                    : mode === "login"
+                      ? "Login"
+                      : "Register"}
+                </FilledButton>
+              </div>
+            </form>
+          </div>
+        </section>
       </div>
     </div>
   );

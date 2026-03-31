@@ -1,9 +1,15 @@
 import { z } from "zod";
 
+const GITAM_EMAIL_PATTERN = /^[^@\s]+@([a-z0-9-]+\.)*gitam\.(edu|in)$/i;
+
 const emailSchema = z
   .string()
   .email()
-  .transform((value) => value.trim().toLowerCase());
+  .transform((value) => value.trim().toLowerCase())
+  .refine(
+    (value) => GITAM_EMAIL_PATTERN.test(value),
+    "Use your GITAM email address (*.gitam.edu or *.gitam.in).",
+  );
 
 export const registerSchema = z.object({
   email: emailSchema,

@@ -2,16 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/utils/session";
 import { verifySessionToken } from "@/lib/utils/jwt";
 
-const PILOT_USER_ID = "a7580a03-6c68-46f9-a505-b409a8410d6e";
-const PILOT_USER_ROLE = "student";
-
 const PUBLIC_API_PATHS = new Set([
   "/api/auth/login",
   "/api/auth/register",
+  "/api/auth/session",
   "/api/auth/confirm",
   "/api/auth/resend-confirmation",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
+]);
+
+const PUBLIC_PAGE_PATHS = new Set([
+  "/auth",
+  "/auth/confirmation",
+  "/auth/forgot-password",
+  "/auth/reset-password",
 ]);
 
 export async function middleware(request: NextRequest) {
@@ -23,19 +28,33 @@ export async function middleware(request: NextRequest) {
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const isPublicApi = pathname.startsWith("/api") && PUBLIC_API_PATHS.has(pathname);
+  const isPublicPage = PUBLIC_PAGE_PATHS.has(pathname);
   const isVisualizationRoute = pathname === "/visualize";
   const isProtectedApi = (pathname.startsWith("/api") && !isPublicApi) || isVisualizationRoute;
+  const isProtectedPage =
+    !pathname.startsWith("/api") &&
+    !isPublicPage &&
+    pathname !== "/favicon.ico" &&
+    !pathname.startsWith("/_next") &&
+    !/\.[a-zA-Z0-9]+$/.test(pathname);
 
   if (!token) {
     if (isProtectedApi) {
-      requestHeaders.set("x-user-id", PILOT_USER_ID);
-      requestHeaders.set("x-user-role", PILOT_USER_ROLE);
-
-      return NextResponse.next({
-        request: {
-          headers: requestHeaders,
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "UNAUTHORIZED",
+            message: "Authentication required",
+          },
         },
-      });
+        { status: 401 },
+      );
+    }
+
+    if (isProtectedPage) {
+      const loginUrl = new URL("/auth", request.url);
+      return NextResponse.redirect(loginUrl);
     }
 
     return NextResponse.next({
@@ -52,6 +71,11 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set("x-session-id", payload.sessionId);
     if (payload.organizationId) {
       requestHeaders.set("x-user-organization-id", payload.organizationId);
+    }
+
+    if (isPublicPage) {
+      const dashboardUrl = new URL("/dashboard", request.url);
+      return NextResponse.redirect(dashboardUrl);
     }
 
     return NextResponse.next({
@@ -73,6 +97,11 @@ export async function middleware(request: NextRequest) {
       );
     }
 
+    if (isProtectedPage) {
+      const loginUrl = new URL("/auth", request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+
     return NextResponse.next({
       request: {
         headers: requestHeaders,
@@ -82,5 +111,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/:path*", "/visualize"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

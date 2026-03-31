@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { createSubmission } from "@/lib/activity/api";
-import { getTestingUserId } from "@/lib/testing/session";
+import { fetchApi } from "@/lib/utils/http";
 import type { ProblemSolveData, RunResult } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -14,10 +14,11 @@ import {
 } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { MonacoCodeEditor } from "@/components/editor/MonacoCodeEditor";
+import { FlowchartPanel } from "@/components/flow/FlowchartPanel";
 import { ExecutionVisualizer } from "@/components/visualization/ExecutionVisualizer";
 import { useActivityTracker } from "@/hooks/useActivityTracker";
 
-type LeftTab = "description" | "submissions";
+type LeftTab = "problem" | "flowchart" | "submissions";
 type BottomTab = "testcases" | "results" | "visualization";
 type ExecutionUiState = "idle" | "queued" | "running" | "completed" | "timeout";
 
@@ -116,20 +117,40 @@ type SubmissionRecord = {
   response: Record<string, unknown> | null;
 };
 
-const leftTabClass = (active: boolean) =>
-  [
-    "rounded-full px-3 py-1.5 text-sm transition",
-    active
-      ? "bg-[color:var(--primary)] text-[color:var(--text-primary)]"
-      : "text-[#c7d6ca] hover:bg-white/5 hover:text-white",
-  ].join(" ");
+type SessionData = {
+  userId: string;
+  role: "student" | "instructor" | "admin";
+  organizationId?: string;
+};
+
+type ProblemSubmissionSummary = {
+  id: string;
+  problemId: string;
+  classroomId: string;
+  language: "python" | "c" | "java";
+  submittedAt: string;
+  submissionPath: string;
+  acceptance: number | null;
+};
+
+type ProblemSubmissionDetail = ProblemSubmissionSummary & {
+  code: string;
+  metadata: Record<string, unknown> | null;
+};
+
+type DraftWorkspaceState = {
+  code: string;
+  language: "python" | "c" | "java";
+  runResult: RunResult | null;
+  executionState: ExecutionUiState;
+};
 
 const bottomTabClass = (active: boolean) =>
   [
     "inline-flex items-center rounded-t-2xl border border-b-0 px-4 py-2 text-sm transition",
     active
-      ? "border-white/10 bg-[#232323] text-white"
-      : "border-transparent bg-transparent text-[#95a39a] hover:text-white",
+      ? "border-[color:var(--border)] bg-[color:var(--card)] text-[color:var(--text-primary)] dark:bg-[#232323] dark:text-white"
+      : "border-transparent bg-transparent text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)] dark:hover:text-white",
   ].join(" ");
 
 function testcaseLabel(id: string, index: number) {
@@ -143,13 +164,18 @@ export default function ProblemSolvePage() {
   const problemId = (params?.id as string) || "";
 
   const [problem, setProblem] = useState<ProblemSolveData | null>(null);
-  const [leftTab, setLeftTab] = useState<LeftTab>("description");
+  const [leftTab, setLeftTab] = useState<LeftTab>("problem");
   const [bottomTab, setBottomTab] = useState<BottomTab>("testcases");
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState<"python" | "c" | "java">("python");
-  const [userId, setUserId] = useState(getTestingUserId);
+  const [userId, setUserId] = useState("");
   const [submissionRecord, setSubmissionRecord] =
     useState<SubmissionRecord | null>(null);
+  const [submissions, setSubmissions] = useState<ProblemSubmissionSummary[]>([]);
+  const [selectedSubmission, setSelectedSubmission] =
+    useState<ProblemSubmissionDetail | null>(null);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [submissionActionLoading, setSubmissionActionLoading] = useState(false);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [executionState, setExecutionState] =
     useState<ExecutionUiState>("idle");
@@ -157,22 +183,127 @@ export default function ProblemSolvePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editorHeight, setEditorHeight] = useState(540);
+  const [editorFontSize, setEditorFontSize] = useState(13);
 
   const resizeStartYRef = useRef(0);
   const resizeStartHeightRef = useRef(540);
+  const draftWorkspaceRef = useRef<DraftWorkspaceState | null>(null);
   const classroomId = searchParams.get("classroomId") ?? undefined;
   const activity = useActivityTracker({ userId, problemId });
+  const isViewingSubmission = selectedSubmission !== null;
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
+  const decreaseEditorFontSize = () => {
+    setEditorFontSize((current) => Math.max(11, current - 1));
+  };
+
+  const increaseEditorFontSize = () => {
+    setEditorFontSize((current) => Math.min(22, current + 1));
+  };
+
+  const loadSubmissions = useCallback(async () => {
+    if (!problemId) {
       return;
     }
 
-    const testingUserId =
-      window.localStorage.getItem("frogmatrix-user-id") ?? getTestingUserId();
-    window.localStorage.setItem("frogmatrix-user-id", testingUserId);
-    setUserId(testingUserId);
+    setSubmissionsLoading(true);
+
+    try {
+      const result = await fetchApi<{ submissions: ProblemSubmissionSummary[] }>(
+        `/api/submissions?problemId=${encodeURIComponent(problemId)}`,
+      );
+      setSubmissions(result.submissions);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load submissions");
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  }, [problemId]);
+
+  const loadSubmissionDetail = async (submissionId: string) => {
+    setSubmissionActionLoading(true);
+
+    try {
+      const result = await fetchApi<{ submission: ProblemSubmissionDetail }>(
+        `/api/submissions/${submissionId}`,
+      );
+      if (!draftWorkspaceRef.current) {
+        draftWorkspaceRef.current = {
+          code,
+          language,
+          runResult,
+          executionState,
+        };
+      }
+      setSelectedSubmission(result.submission);
+      setCode(result.submission.code);
+      setLanguage(result.submission.language);
+      setRunResult(null);
+      setExecutionState("completed");
+      setBottomTab("results");
+      setLeftTab("submissions");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load submission");
+    } finally {
+      setSubmissionActionLoading(false);
+    }
+  };
+
+  const restoreDraftWorkspace = () => {
+    if (!draftWorkspaceRef.current) {
+      setSelectedSubmission(null);
+      return;
+    }
+
+    setCode(draftWorkspaceRef.current.code);
+    setLanguage(draftWorkspaceRef.current.language);
+    setRunResult(draftWorkspaceRef.current.runResult);
+    setExecutionState(draftWorkspaceRef.current.executionState);
+    setSelectedSubmission(null);
+    draftWorkspaceRef.current = null;
+  };
+
+  const deleteSubmission = async (submissionId: string) => {
+    setSubmissionActionLoading(true);
+
+    try {
+      await fetchApi<{ deleted: true; submissionId: string }>(`/api/submissions/${submissionId}`, {
+        method: "DELETE",
+      });
+      setSubmissions((current) => current.filter((submission) => submission.id !== submissionId));
+      if (selectedSubmission?.id === submissionId) {
+        restoreDraftWorkspace();
+      } else {
+        setSelectedSubmission((current) =>
+          current?.id === submissionId ? null : current,
+        );
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete submission");
+    } finally {
+      setSubmissionActionLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const loadSession = async () => {
+      try {
+        const session = await fetchApi<SessionData>("/api/auth/session");
+        setUserId(session.userId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load session");
+      }
+    };
+
+    void loadSession();
   }, []);
+
+  useEffect(() => {
+    if (!userId || !problemId) {
+      return;
+    }
+
+    void loadSubmissions();
+  }, [loadSubmissions, problemId, userId]);
 
   useEffect(() => {
     if (!problemId) return;
@@ -186,6 +317,8 @@ export default function ProblemSolvePage() {
         setCode(data.baseCode || "");
         setRunResult(null);
         setSubmissionRecord(null);
+        setSelectedSubmission(null);
+        draftWorkspaceRef.current = null;
         setExecutionState("idle");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load problem");
@@ -258,6 +391,46 @@ export default function ProblemSolvePage() {
     [problem],
   );
 
+  const viewedSubmissionResult = useMemo<RunResult | null>(() => {
+    if (!selectedSubmission) {
+      return null;
+    }
+
+    const metadata = selectedSubmission.metadata ?? {};
+    const testcaseResults = Array.isArray(metadata.testcase_results)
+      ? metadata.testcase_results
+      : Array.isArray(metadata.results)
+        ? metadata.results
+        : [];
+    const passed = testcaseResults.filter(
+      (test) => typeof test === "object" && test !== null && (test as { passed?: boolean }).passed,
+    ).length;
+    const total = testcaseResults.length || visibleTestcases.length;
+
+    return {
+      status: "completed",
+      language: selectedSubmission.language,
+      result: {
+        status:
+          typeof metadata.status === "string"
+            ? (metadata.status as
+                | "Accepted"
+                | "Wrong Answer"
+                | "Compilation Error"
+                | "Runtime Error"
+                | "Time Limit Exceeded")
+            : selectedSubmission.acceptance === 1
+              ? "Accepted"
+              : "Wrong Answer",
+        passed,
+        total,
+      },
+      tests: [],
+    };
+  }, [selectedSubmission, visibleTestcases.length]);
+
+  const activeRunResult = isViewingSubmission ? viewedSubmissionResult : runResult;
+
   const submissionOutput = useMemo(() => {
     if (!submissionRecord) return "No submission created yet.";
     return [
@@ -274,11 +447,29 @@ export default function ProblemSolvePage() {
 
   const testcaseChecksById = useMemo(() => {
     const checks = visibleTestcases.map((test, index) => {
-      const result = runResult?.result;
+      const result = activeRunResult?.result;
       let status: TestcaseCheck["status"] = "idle";
       let actualOutput = "";
 
-      if (runResult?.status === "completed") {
+      if (isViewingSubmission && selectedSubmission?.metadata) {
+        const testcaseResults = Array.isArray(selectedSubmission.metadata.testcase_results)
+          ? selectedSubmission.metadata.testcase_results
+          : Array.isArray(selectedSubmission.metadata.results)
+            ? selectedSubmission.metadata.results
+            : [];
+        const submissionTest = testcaseResults[index] as
+          | { passed?: boolean; actualOutput?: string; output?: string }
+          | undefined;
+
+        if (submissionTest) {
+          status = submissionTest.passed ? "pass" : "fail";
+          actualOutput = submissionTest.actualOutput ?? submissionTest.output ?? "";
+        } else if (selectedSubmission.acceptance === 1) {
+          status = "pass";
+        }
+      }
+
+      if (!isViewingSubmission && runResult?.status === "completed") {
         if (result?.status === "Accepted") {
           status = "pass";
           actualOutput = result.got ?? "";
@@ -304,35 +495,15 @@ export default function ProblemSolvePage() {
     });
 
     return new Map(checks.map((check) => [check.id, check]));
-  }, [runResult, visibleTestcases]);
-
-  const runOutput = useMemo(() => {
-    if (executionState === "timeout")
-      return "Execution timed out after 60 seconds.";
-    if (!runResult) return "Run code to populate testcase results.";
-    if (runResult.status === "queued" || runResult.status === "running") {
-      return `Execution ${runResult.status}...`;
-    }
-    if (runResult.status === "failed") {
-      return runResult.result?.error || "Execution failed.";
-    }
-    if (!runResult.result) {
-      return "Execution completed, but verdict is unavailable.";
-    }
-    return [
-      `Status: ${runResult.result.status}`,
-      `Passed: ${runResult.result.passed ?? 0}/${runResult.result.total ?? 0}`,
-      runResult.result.error ? `Error: ${runResult.result.error}` : null,
-      runResult.result.expected
-        ? `Expected: ${runResult.result.expected}`
-        : null,
-      runResult.result.got ? `Got: ${runResult.result.got}` : null,
-    ]
-      .filter(Boolean)
-      .join("\n");
-  }, [executionState, runResult]);
+  }, [activeRunResult, isViewingSubmission, runResult, selectedSubmission, visibleTestcases]);
 
   const statusBadge = useMemo(() => {
+    if (isViewingSubmission && selectedSubmission) {
+      return {
+        label: selectedSubmission.acceptance === 1 ? "Accepted" : "Submission",
+        tone: selectedSubmission.acceptance === 1 ? ("success" as const) : ("neutral" as const),
+      };
+    }
     if (executionState === "queued")
       return { label: "Queued", tone: "warning" as const };
     if (executionState === "running")
@@ -348,11 +519,16 @@ export default function ProblemSolvePage() {
       };
     }
     return { label: "Idle", tone: "neutral" as const };
-  }, [executionState, runResult]);
+  }, [executionState, isViewingSubmission, runResult, selectedSubmission]);
 
   const handleSubmit = async () => {
     if (!problem || !problemId) {
       setError("Problem is not loaded.");
+      return;
+    }
+
+    if (isViewingSubmission) {
+      setError("Return to your current draft before creating a new submission.");
       return;
     }
 
@@ -383,7 +559,7 @@ export default function ProblemSolvePage() {
       });
       activity.clearQueue();
       activity.resetSubmissionSession();
-      setLeftTab("submissions");
+      await loadSubmissions();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit");
     } finally {
@@ -447,27 +623,10 @@ export default function ProblemSolvePage() {
 
   return (
     <AppShell hideFooter fullBleed>
-      <div className="grid min-h-[calc(100vh-60px)] grid-cols-1 bg-[#111111] text-white xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <section className="flex min-h-[calc(100vh-60px)] flex-col border-r border-white/8 bg-[#1a1a1a]">
-          <div className="flex items-center gap-2 border-b border-white/8 px-4 py-3">
-            <button
-              type="button"
-              className={leftTabClass(leftTab === "description")}
-              onClick={() => setLeftTab("description")}
-            >
-              Description
-            </button>
-            <button
-              type="button"
-              className={leftTabClass(leftTab === "submissions")}
-              onClick={() => setLeftTab("submissions")}
-            >
-              Submissions
-            </button>
-          </div>
-
-          {leftTab === "description" ? (
-            <div className="app-scrollbar flex-1 overflow-auto px-5 py-5">
+      <div className="grid min-h-[calc(100vh-60px)] grid-cols-1 bg-[color:var(--surface)] text-[color:var(--text-primary)] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] dark:bg-[#111111] dark:text-white">
+        <section className="flex min-h-[calc(100vh-60px)] flex-col border-r border-[color:var(--border)] bg-[color:var(--surface)] dark:border-white/8 dark:bg-[#1a1a1a]">
+          <div className="app-scrollbar flex-1 overflow-auto px-5 py-5">
+            {leftTab === "problem" ? (
               <div className="mx-auto max-w-4xl space-y-5">
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
@@ -487,11 +646,11 @@ export default function ProblemSolvePage() {
                     <Badge tone="neutral">{language.toUpperCase()}</Badge>
                     <Badge tone={statusBadge.tone}>{statusBadge.label}</Badge>
                   </div>
-                  <h1 className="text-3xl font-semibold text-white">
+                  <h1 className="text-3xl font-semibold text-[color:var(--text-primary)] dark:text-white">
                     {problem?.title ?? "Loading problem"}
                   </h1>
                   {classroomId ? (
-                    <p className="text-sm text-[#a8b7ad]">
+                    <p className="text-sm text-[color:var(--text-secondary)] dark:text-[#a8b7ad]">
                       Classroom context active.
                     </p>
                   ) : null}
@@ -501,58 +660,220 @@ export default function ProblemSolvePage() {
                 </div>
 
                 <article
-                  className="rounded-[28px] border border-white/8 bg-[#202020] p-6 text-[15px] leading-7 text-[#e8efe9]
+                  className="rounded-[28px] border border-[color:var(--border)] bg-[color:var(--card)] p-6 text-[15px] leading-7 text-[color:var(--text-primary)]
                   [&_h1]:mb-3 [&_h1]:text-2xl [&_h2]:mb-3 [&_h2]:text-xl [&_h3]:mb-2 [&_h3]:text-lg
-                  [&_p]:mb-4 [&_pre]:mb-4 [&_pre]:overflow-auto [&_pre]:rounded-2xl [&_pre]:bg-[#171717] [&_pre]:p-4
-                  [&_ul]:mb-4 [&_ul]:list-disc [&_ul]:pl-6 [&_code]:font-mono [&_code]:text-[#8de0a8]"
+                  [&_p]:mb-4 [&_pre]:mb-4 [&_pre]:overflow-auto [&_pre]:rounded-2xl [&_pre]:bg-[color:var(--surface)] [&_pre]:p-4
+                  [&_ul]:mb-4 [&_ul]:list-disc [&_ul]:pl-6 [&_code]:font-mono [&_code]:text-[color:var(--primary)]
+                  dark:border-white/8 dark:bg-[#202020] dark:text-[#e8efe9] dark:[&_pre]:bg-[#171717] dark:[&_code]:text-[#8de0a8]"
                   dangerouslySetInnerHTML={{ __html: renderedDescription }}
                 />
 
-                <div className="rounded-[24px] border border-white/8 bg-[#202020] p-5">
-                  <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[#8ca097]">
+                <div className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--card)] p-5 dark:border-white/8 dark:bg-[#202020]">
+                  <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[color:var(--text-secondary)] dark:text-[#8ca097]">
                     Constraints
                   </p>
-                  <pre className="whitespace-pre-wrap font-mono text-sm text-[#d8e2db]">
+                  <pre className="whitespace-pre-wrap font-mono text-sm text-[color:var(--text-primary)] dark:text-[#d8e2db]">
                     {problem?.constraints || "No constraints provided."}
                   </pre>
                 </div>
-              </div>
-            </div>
-          ) : (
-            <div className="app-scrollbar flex-1 overflow-auto px-5 py-5">
-              <div className="mx-auto max-w-4xl space-y-4">
-                <div className="rounded-[24px] border border-white/8 bg-[#202020] p-5">
-                  <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[#8ca097]">
-                    Submission
+
+                <div className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--card)] p-5 dark:border-white/8 dark:bg-[#202020]">
+                  <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[color:var(--text-secondary)] dark:text-[#8ca097]">
+                    Latest Submission
                   </p>
-                  <pre className="whitespace-pre-wrap font-mono text-sm text-[#d8e2db]">
+                  <pre className="whitespace-pre-wrap font-mono text-sm text-[color:var(--text-primary)] dark:text-[#d8e2db]">
                     {submissionOutput}
                   </pre>
                 </div>
-                <div className="rounded-[24px] border border-white/8 bg-[#202020] p-5">
-                  <p className="mb-2 text-xs uppercase tracking-[0.18em] text-[#8ca097]">
-                    Execution
-                  </p>
-                  <pre className="whitespace-pre-wrap font-mono text-sm text-[#d8e2db]">
-                    {runOutput}
-                  </pre>
+              </div>
+            ) : leftTab === "flowchart" ? (
+              <div className="flex h-full min-h-[calc(100vh-180px)] flex-col">
+                <FlowchartPanel data={problem?.flowchart ?? null} />
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--text-secondary)]">
+                      Submissions
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold text-[color:var(--text-primary)] dark:text-white">
+                      Your runs for this problem
+                    </h2>
+                  </div>
+                  {selectedSubmission ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="neutral">{selectedSubmission.language.toUpperCase()}</Badge>
+                      <Badge tone="success">Read only</Badge>
+                      {selectedSubmission.acceptance !== null ? (
+                        <Badge tone={selectedSubmission.acceptance === 1 ? "success" : "warning"}>
+                          Acceptance {Math.round(selectedSubmission.acceptance * 100)}%
+                        </Badge>
+                      ) : null}
+                      <TextButton onClick={restoreDraftWorkspace} size="sm">
+                        Back to current draft
+                      </TextButton>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="space-y-3">
+                  {submissionsLoading ? (
+                    <div className="rounded-[24px] border border-[color:var(--border)] bg-[color:var(--card)] px-4 py-6 text-sm text-[color:var(--text-secondary)]">
+                      Loading submissions...
+                    </div>
+                  ) : submissions.length > 0 ? (
+                    submissions.map((submission) => {
+                      const isSelected = selectedSubmission?.id === submission.id;
+
+                      return (
+                        <div
+                          key={submission.id}
+                          className={[
+                            "rounded-[24px] border bg-[color:var(--card)] p-4 transition",
+                            isSelected
+                              ? "border-[color:var(--primary)] ring-1 ring-[color:var(--primary)]/25"
+                              : "border-[color:var(--border)]",
+                          ].join(" ")}
+                        >
+                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div className="space-y-1">
+                              <p className="text-sm font-semibold text-[color:var(--text-primary)] dark:text-white">
+                                {new Intl.DateTimeFormat("en-IN", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }).format(new Date(submission.submittedAt))}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-xs uppercase tracking-[0.16em] text-[color:var(--text-secondary)]">
+                                  {submission.language.toUpperCase()}
+                                </p>
+                                {submission.acceptance !== null ? (
+                                  <Badge tone={submission.acceptance === 1 ? "success" : "warning"}>
+                                    {Math.round(submission.acceptance * 100)}%
+                                  </Badge>
+                                ) : null}
+                                {isSelected ? <Badge tone="neutral">Viewing</Badge> : null}
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <RoundedButton
+                                onClick={() => void loadSubmissionDetail(submission.id)}
+                                disabled={submissionActionLoading}
+                                size="sm"
+                              >
+                                View
+                              </RoundedButton>
+                              <TextButton
+                                onClick={() => void deleteSubmission(submission.id)}
+                                disabled={submissionActionLoading}
+                                size="sm"
+                                className="text-[color:var(--error)] hover:bg-[color:var(--error)]/10"
+                              >
+                                Delete
+                              </TextButton>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-[24px] border border-dashed border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-6 text-sm text-[color:var(--text-secondary)]">
+                      No submissions for this problem yet.
+                    </div>
+                  )}
                 </div>
               </div>
+            )}
+          </div>
+
+          <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-[color:var(--border)] bg-[color:var(--surface)] px-4 pt-3 dark:border-white/8 dark:bg-[#151515]">
+            <button
+              type="button"
+              className={bottomTabClass(leftTab === "problem")}
+              onClick={() => setLeftTab("problem")}
+            >
+              Problem
+            </button>
+            <button
+              type="button"
+              className={bottomTabClass(leftTab === "flowchart")}
+              onClick={() => setLeftTab("flowchart")}
+            >
+              Flowchart
+            </button>
+            <button
+              type="button"
+              className={bottomTabClass(leftTab === "submissions")}
+              onClick={() => setLeftTab("submissions")}
+            >
+              Submissions
+            </button>
+            <div className="ml-auto pb-2">
+              <TextButton
+                size="sm"
+                className="text-[color:var(--text-secondary)] hover:bg-black/5 hover:text-[color:var(--text-primary)] dark:text-[#8ca097] dark:hover:bg-white/5 dark:hover:text-white"
+              >
+                {leftTab === "flowchart" ? "Graph View" : statusBadge.label}
+              </TextButton>
             </div>
-          )}
+          </div>
         </section>
 
-        <section className="flex min-h-[calc(100vh-60px)] flex-col bg-[#111111]">
-          <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+        <section className="flex min-h-[calc(100vh-60px)] flex-col bg-[color:var(--surface)] dark:bg-[#111111]">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center border-b border-[color:var(--border)] bg-[color:var(--card)] px-4 py-3 dark:border-white/8 dark:bg-[#111111]">
             <div className="space-y-1">
-              <p className="text-lg font-semibold text-white">Code</p>
-              <p className="text-xs text-[#8ca097]">
+              <p className="text-lg font-semibold text-[color:var(--text-primary)] dark:text-white">Code</p>
+              <p className="text-xs text-[color:var(--text-secondary)] dark:text-[#8ca097]">
                 Write, run, and submit from the same workspace.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="grid gap-1 text-[9px] uppercase tracking-[0.14em] text-[#8ca097]">
+            <div className="flex items-center justify-center gap-3">
+              <FilledButton
+                onClick={handleRun}
+                disabled={running || submitting || isViewingSubmission}
+                size="sm"
+                className="border-[color:var(--primary)] bg-[color:var(--primary)] text-white hover:border-[color:var(--primary-hover)] hover:bg-[color:var(--primary-hover)] dark:border-white/10 dark:bg-[#191919] dark:hover:border-[#22c55e] dark:hover:bg-[#191919] dark:hover:text-[#22c55e]"
+              >
+                {running ? "Running..." : "Run"}
+              </FilledButton>
+              <RoundedButton
+                onClick={handleSubmit}
+                disabled={submitting || isViewingSubmission}
+                size="sm"
+                className="text-[#0f1b12]"
+              >
+                {submitting ? "Submitting..." : "Submit"}
+              </RoundedButton>
+            </div>
+
+            <div className="flex flex-wrap items-end justify-end gap-3">
+              <div className="flex items-center gap-1 rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-1 dark:border-white/10 dark:bg-[#1a1a1a]">
+                <button
+                  type="button"
+                  onClick={decreaseEditorFontSize}
+                  className="grid h-8 w-8 place-items-center rounded-xl text-sm font-semibold text-[color:var(--text-primary)] transition hover:bg-black/5 dark:text-[#cdd7d1] dark:hover:bg-white/8 dark:hover:text-white"
+                  aria-label="Decrease editor font size"
+                >
+                  A-
+                </button>
+                <div className="min-w-10 text-center text-xs font-semibold text-[color:var(--text-secondary)] dark:text-[#8ca097]">
+                  {editorFontSize}px
+                </div>
+                <button
+                  type="button"
+                  onClick={increaseEditorFontSize}
+                  className="grid h-8 w-8 place-items-center rounded-xl text-sm font-semibold text-[color:var(--text-primary)] transition hover:bg-black/5 dark:text-[#cdd7d1] dark:hover:bg-white/8 dark:hover:text-white"
+                  aria-label="Increase editor font size"
+                >
+                  A+
+                </button>
+              </div>
+              <label className="grid gap-1 text-[9px] uppercase tracking-[0.14em] text-[color:var(--text-secondary)] dark:text-[#8ca097]">
                 Language
                 <select
                   id="language"
@@ -560,7 +881,8 @@ export default function ProblemSolvePage() {
                   onChange={(event) =>
                     setLanguage(event.target.value as "python" | "c" | "java")
                   }
-                  className="h-8 rounded-xl border border-white/10 bg-[#1d1d1d] px-3 text-xs text-white outline-none"
+                  disabled={isViewingSubmission}
+                  className="h-8 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-xs text-[color:var(--text-primary)] outline-none dark:border-white/10 dark:bg-[#1d1d1d] dark:text-white"
                 >
                   {(problem?.languages || []).map((option) => (
                     <option key={option} value={option}>
@@ -569,46 +891,32 @@ export default function ProblemSolvePage() {
                   ))}
                 </select>
               </label>
-              <FilledButton
-                onClick={handleRun}
-                disabled={running || submitting}
-                size="sm"
-                className="border-white/10 bg-[#191919] text-white hover:border-[#22c55e] hover:text-[#22c55e]"
-              >
-                {running ? "Running..." : "Run"}
-              </FilledButton>
-              <RoundedButton
-                onClick={handleSubmit}
-                disabled={submitting}
-                size="sm"
-                className="text-[#0f1b12]"
-              >
-                {submitting ? "Submitting..." : "Submit"}
-              </RoundedButton>
             </div>
           </div>
 
           <div
-            className="border-b border-white/8"
+            className="border-b border-[color:var(--border)] dark:border-white/8"
             style={{ height: `${editorHeight}px` }}
           >
             <MonacoCodeEditor
               language={language}
               value={code}
               onChange={setCode}
+              fontSize={editorFontSize}
+              readOnly={isViewingSubmission}
               onContentChange={(length) => activity.recordCodeChange(length)}
             />
           </div>
 
           <div
-            className="h-2 cursor-ns-resize bg-[#171717]"
+            className="h-2 cursor-ns-resize bg-[color:var(--card)] dark:bg-[#171717]"
             onMouseDown={startResize}
             role="separator"
             aria-label="Resize editor"
           />
 
-          <div className="flex min-h-0 flex-1 flex-col justify-end bg-[#121212]">
-            <div className="app-scrollbar min-h-[220px] flex-1 overflow-auto border-t border-white/8 bg-[#1a1a1a] px-4 py-4">
+          <div className="flex min-h-0 flex-1 flex-col justify-end bg-[color:var(--surface)] dark:bg-[#121212]">
+            <div className="app-scrollbar min-h-[220px] flex-1 overflow-auto border-t border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-4 dark:border-white/8 dark:bg-[#1a1a1a]">
               {bottomTab === "testcases" ? (
                 <div className="space-y-3">
                   {visibleTestcases.map((test, index) => {
@@ -616,10 +924,10 @@ export default function ProblemSolvePage() {
                     return (
                       <div
                         key={test.id}
-                        className="rounded-2xl border border-white/8 bg-[#222222] p-4"
+                        className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] p-4 dark:border-white/8 dark:bg-[#222222]"
                       >
                         <div className="mb-3 flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-white">
+                          <p className="text-sm font-medium text-[color:var(--text-primary)] dark:text-white">
                             {testcaseLabel(test.id, index)}
                           </p>
                           {result?.status === "pass" ? (
@@ -631,18 +939,18 @@ export default function ProblemSolvePage() {
                         </div>
                         <div className="grid gap-3 md:grid-cols-2">
                           <div>
-                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#8ca097]">
+                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[color:var(--text-secondary)] dark:text-[#8ca097]">
                               Input
                             </p>
-                            <pre className="whitespace-pre-wrap rounded-xl bg-[#171717] p-3 font-mono text-xs text-[#dbe7dd]">
+                            <pre className="whitespace-pre-wrap rounded-xl bg-[color:var(--surface)] p-3 font-mono text-xs text-[color:var(--text-primary)] dark:bg-[#171717] dark:text-[#dbe7dd]">
                               {test.input || "(empty)"}
                             </pre>
                           </div>
                           <div>
-                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#8ca097]">
+                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[color:var(--text-secondary)] dark:text-[#8ca097]">
                               Expected Output
                             </p>
-                            <pre className="whitespace-pre-wrap rounded-xl bg-[#171717] p-3 font-mono text-xs text-[#dbe7dd]">
+                            <pre className="whitespace-pre-wrap rounded-xl bg-[color:var(--surface)] p-3 font-mono text-xs text-[color:var(--text-primary)] dark:bg-[#171717] dark:text-[#dbe7dd]">
                               {test.expectedOutput || "(empty)"}
                             </pre>
                           </div>
@@ -660,10 +968,10 @@ export default function ProblemSolvePage() {
                     return (
                       <div
                         key={`${test.id}-result`}
-                        className="rounded-2xl border border-white/8 bg-[#222222] p-4"
+                        className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] p-4 dark:border-white/8 dark:bg-[#222222]"
                       >
                         <div className="mb-3 flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-white">
+                          <p className="text-sm font-medium text-[color:var(--text-primary)] dark:text-white">
                             {testcaseLabel(test.id, index)}
                           </p>
                           {result?.status === "pass" ? (
@@ -678,20 +986,20 @@ export default function ProblemSolvePage() {
                         </div>
                         <div className="grid gap-3 md:grid-cols-2">
                           <div>
-                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#8ca097]">
+                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[color:var(--text-secondary)] dark:text-[#8ca097]">
                               Expected
                             </p>
-                            <pre className="whitespace-pre-wrap rounded-xl bg-[#171717] p-3 font-mono text-xs text-[#dbe7dd]">
+                            <pre className="whitespace-pre-wrap rounded-xl bg-[color:var(--surface)] p-3 font-mono text-xs text-[color:var(--text-primary)] dark:bg-[#171717] dark:text-[#dbe7dd]">
                               {result?.expectedOutput ||
                                 test.expectedOutput ||
                                 "(empty)"}
                             </pre>
                           </div>
                           <div>
-                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[#8ca097]">
+                            <p className="mb-1 text-[11px] uppercase tracking-[0.14em] text-[color:var(--text-secondary)] dark:text-[#8ca097]">
                               Actual
                             </p>
-                            <pre className="whitespace-pre-wrap rounded-xl bg-[#171717] p-3 font-mono text-xs text-[#dbe7dd]">
+                            <pre className="whitespace-pre-wrap rounded-xl bg-[color:var(--surface)] p-3 font-mono text-xs text-[color:var(--text-primary)] dark:bg-[#171717] dark:text-[#dbe7dd]">
                               {result?.status === "idle"
                                 ? "Run code to view testcase output."
                                 : result?.actualOutput || "(empty)"}
@@ -705,7 +1013,7 @@ export default function ProblemSolvePage() {
               ) : null}
 
               {bottomTab === "visualization" ? (
-                <div className="rounded-2xl border border-white/8 bg-[#222222] p-4">
+                <div className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--card)] p-4 dark:border-white/8 dark:bg-[#222222]">
                   <ExecutionVisualizer
                     language={language}
                     code={code}
@@ -715,7 +1023,7 @@ export default function ProblemSolvePage() {
               ) : null}
             </div>
 
-            <div className="flex flex-wrap sticky bottom-0 items-center gap-2 border-t border-white/8 bg-[#151515] px-4 pt-3">
+            <div className="flex flex-wrap sticky bottom-0 items-center gap-2 border-t border-[color:var(--border)] bg-[color:var(--surface)] px-4 pt-3 dark:border-white/8 dark:bg-[#151515]">
               <button
                 type="button"
                 className={bottomTabClass(bottomTab === "testcases")}
@@ -740,7 +1048,7 @@ export default function ProblemSolvePage() {
               <div className="ml-auto pb-2">
                 <TextButton
                   size="sm"
-                  className="text-[#8ca097] hover:bg-white/5 hover:text-white"
+                  className="text-[color:var(--text-secondary)] hover:bg-black/5 hover:text-[color:var(--text-primary)] dark:text-[#8ca097] dark:hover:bg-white/5 dark:hover:text-white"
                 >
                   {statusBadge.label}
                 </TextButton>

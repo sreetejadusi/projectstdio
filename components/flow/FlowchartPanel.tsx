@@ -1,12 +1,13 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
-  Controls,
   Handle,
   MarkerType,
+  Panel,
   Position,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -22,29 +23,69 @@ type FlowNodeData = {
   label: string;
   status: "neutral" | "matched";
   isHovered: boolean;
+  onHoverStart: (nodeId: string) => void;
+  onHoverEnd: () => void;
 };
 
-const FlowNode = memo(({ data }: NodeProps<FlowNodeData>) => {
+function FlowchartControls() {
+  const { fitView, zoomIn, zoomOut } = useReactFlow();
+
+  return (
+    <Panel position="top-right">
+      <div className="flex items-center gap-2 rounded-2xl border border-emerald-900/40 bg-slate-950/85 p-2 shadow-[0_18px_40px_rgba(3,7,18,0.45)] backdrop-blur">
+        <button
+          type="button"
+          onClick={() => zoomOut()}
+          className="grid h-9 w-9 place-items-center rounded-xl border border-emerald-800/60 bg-slate-900 text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/15"
+          aria-label="Zoom out"
+        >
+          -
+        </button>
+        <button
+          type="button"
+          onClick={() => fitView({ duration: 300, padding: 0.2 })}
+          className="rounded-xl border border-emerald-800/60 bg-slate-900 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/15"
+        >
+          Fit
+        </button>
+        <button
+          type="button"
+          onClick={() => zoomIn()}
+          className="grid h-9 w-9 place-items-center rounded-xl border border-emerald-800/60 bg-slate-900 text-emerald-100 transition hover:border-emerald-400 hover:bg-emerald-500/15"
+          aria-label="Zoom in"
+        >
+          +
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+const FlowNode = memo(({ data, id }: NodeProps<FlowNodeData>) => {
   return (
     <div
-      className={`min-w-44 rounded-2xl border px-4 py-3 shadow-[0_14px_28px_rgba(105,83,55,0.12)] backdrop-blur ${
+      onMouseEnter={() => data.onHoverStart(id)}
+      onMouseLeave={data.onHoverEnd}
+      className={`min-w-48 rounded-[22px] border px-4 py-3 shadow-[0_18px_36px_rgba(3,7,18,0.28)] backdrop-blur transition duration-150 ${
         data.isHovered
-          ? "border-[color:var(--primary)] bg-gradient-to-b from-[color:var(--card)] to-[color:var(--surface)] shadow-[0_0_0_2px_rgba(34,197,94,0.2),0_18px_34px_rgba(20,83,45,0.18)]"
+          ? "border-emerald-300 bg-gradient-to-br from-emerald-100 via-white to-emerald-50 shadow-[0_0_0_3px_rgba(74,222,128,0.22),0_22px_44px_rgba(16,185,129,0.18)]"
           : data.status === "matched"
-            ? "border-[color:var(--success)]/70 bg-gradient-to-b from-[color:var(--card)] to-[color:var(--surface)]"
-            : "border-[color:var(--border)] bg-gradient-to-b from-[color:var(--surface)] to-[color:var(--card)]"
+          ? "border-emerald-400/80 bg-gradient-to-br from-emerald-100 via-white to-emerald-50"
+          : "border-slate-200 bg-gradient-to-br from-white via-slate-50 to-emerald-50/60"
       }`}
     >
       <Handle
         type="target"
         position={Position.Top}
-        className="!h-2.5 !w-2.5 !border !border-[color:var(--primary)] !bg-[color:var(--primary)]"
+        className="!h-3 !w-3 !border !border-emerald-500 !bg-white"
       />
-      <div className="text-center text-xs font-semibold tracking-wide text-[color:var(--text-primary)]">{data.label}</div>
+      <div className="text-center text-sm font-semibold tracking-[0.01em] text-slate-900">
+        {data.label}
+      </div>
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!h-2.5 !w-2.5 !border !border-[color:var(--primary)] !bg-[color:var(--primary)]"
+        className="!h-3 !w-3 !border !border-emerald-500 !bg-white"
       />
     </div>
   );
@@ -170,6 +211,14 @@ function buildTidyPositions(data: FlowchartData): Record<string, { x: number; y:
 export function FlowchartPanel({ data }: Props) {
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
+  const handleHoverStart = useCallback((nodeId: string) => {
+    setHoveredNodeId(nodeId);
+  }, []);
+
+  const handleHoverEnd = useCallback(() => {
+    setHoveredNodeId(null);
+  }, []);
+
   const tidyPositions = useMemo(() => (data ? buildTidyPositions(data) : {}), [data]);
 
   const nodes = useMemo<Node[]>(() => {
@@ -183,11 +232,13 @@ export function FlowchartPanel({ data }: Props) {
         label: node.label,
         status: node.status,
         isHovered: hoveredNodeId === node.id,
+        onHoverStart: handleHoverStart,
+        onHoverEnd: handleHoverEnd,
       },
       draggable: false,
       selectable: false,
     }));
-  }, [data, hoveredNodeId, tidyPositions]);
+  }, [data, handleHoverEnd, handleHoverStart, hoveredNodeId, tidyPositions]);
 
   const edges = useMemo<Edge[]>(() => {
     if (!data) return [];
@@ -201,13 +252,18 @@ export function FlowchartPanel({ data }: Props) {
       selectable: false,
       style: {
         stroke:
-          hoveredNodeId === edge.source || hoveredNodeId === edge.target ? "#22c55e" : "#6fcf8d",
-        strokeOpacity: hoveredNodeId ? 0.9 : 0.7,
-        strokeWidth: hoveredNodeId === edge.source || hoveredNodeId === edge.target ? 3 : 2,
+          hoveredNodeId === edge.source || hoveredNodeId === edge.target ? "#22c55e" : "#14532d",
+        strokeOpacity:
+          hoveredNodeId === edge.source || hoveredNodeId === edge.target ? 1 : 0.82,
+        strokeWidth:
+          hoveredNodeId === edge.source || hoveredNodeId === edge.target ? 3.5 : 2.5,
       },
       markerEnd: {
         type: MarkerType.ArrowClosed,
-        color: hoveredNodeId === edge.source || hoveredNodeId === edge.target ? "#22c55e" : "#6fcf8d",
+        color:
+          hoveredNodeId === edge.source || hoveredNodeId === edge.target
+            ? "#22c55e"
+            : "#14532d",
         width: 18,
         height: 18,
       },
@@ -216,14 +272,14 @@ export function FlowchartPanel({ data }: Props) {
 
   if (!data) {
     return (
-      <div className="grid h-full min-h-64 place-items-center rounded-2xl border border-dashed border-[color:var(--border)] bg-[color:var(--surface)] text-sm text-[color:var(--text-secondary)]">
+      <div className="grid h-full min-h-64 place-items-center rounded-[28px] border border-dashed border-[color:var(--border)] bg-[color:var(--surface)] text-sm text-[color:var(--text-secondary)]">
         <p>No flowchart available yet.</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full min-h-64 overflow-hidden rounded-2xl border border-[color:var(--border)] bg-[radial-gradient(circle_at_20%_20%,rgba(34,197,94,0.12),transparent_45%),radial-gradient(circle_at_80%_75%,rgba(52,208,108,0.08),transparent_45%),linear-gradient(180deg,var(--surface),var(--card))]">
+    <div className="h-full min-h-64 overflow-hidden rounded-[28px] border border-emerald-900/15 bg-[radial-gradient(circle_at_20%_15%,rgba(74,222,128,0.22),transparent_28%),radial-gradient(circle_at_82%_82%,rgba(16,185,129,0.16),transparent_24%),linear-gradient(180deg,#f7fef9_0%,#ebfff2_100%)] dark:border-emerald-400/15 dark:bg-[radial-gradient(circle_at_20%_15%,rgba(34,197,94,0.18),transparent_28%),radial-gradient(circle_at_82%_82%,rgba(16,185,129,0.12),transparent_24%),linear-gradient(180deg,#07130d_0%,#0b1911_100%)]">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -239,15 +295,9 @@ export function FlowchartPanel({ data }: Props) {
         elementsSelectable={false}
         minZoom={0.4}
         maxZoom={1.8}
-        onNodeMouseEnter={(_, node) => setHoveredNodeId(node.id)}
-        onNodeMouseLeave={() => setHoveredNodeId(null)}
-        onPaneMouseLeave={() => setHoveredNodeId(null)}
       >
-        <Controls
-          showInteractive={false}
-          className="[&>button]:!h-8 [&>button]:!w-8 [&>button]:!border-[color:var(--border)] [&>button]:!bg-[color:var(--card)] [&>button]:!text-[color:var(--text-primary)] [&>button:hover]:!bg-[color:var(--surface)]"
-        />
-        <Background color="rgba(34, 197, 94, 0.18)" gap={22} size={1} />
+        <FlowchartControls />
+        <Background color="rgba(20, 83, 45, 0.18)" gap={24} size={1.2} />
       </ReactFlow>
     </div>
   );

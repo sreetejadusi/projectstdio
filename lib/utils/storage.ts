@@ -8,8 +8,8 @@ export function buildProblemBasePath(problemId: string) {
   return normalizePath(`problems/${problemId}`);
 }
 
-export function buildSubmissionBasePath(submissionId: string) {
-  return normalizePath(`submissions/${submissionId}`);
+export function buildSubmissionBasePath(userId: string, submissionId: string) {
+  return normalizePath(`${userId}/${submissionId}`);
 }
 
 export function assertStoragePath(path: string) {

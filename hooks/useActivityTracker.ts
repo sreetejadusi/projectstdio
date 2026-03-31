@@ -157,21 +157,96 @@ export function useActivityTracker({
       }
     };
 
-    const handleCopy = () => enqueue({ type: "copy", t: Date.now() });
-    const handlePaste = () => enqueue({ type: "paste", t: Date.now() });
+    const blockEvent = (event: Event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    const handleCopy = (event: ClipboardEvent) => {
+      blockEvent(event);
+      enqueue({ type: "copy", t: Date.now() });
+    };
+    const handleCut = (event: ClipboardEvent) => {
+      blockEvent(event);
+      enqueue({ type: "cut", t: Date.now() });
+    };
+    const handlePaste = (event: ClipboardEvent) => {
+      blockEvent(event);
+      enqueue({ type: "paste", t: Date.now() });
+    };
+    const handleContextMenu = (event: MouseEvent) => {
+      blockEvent(event);
+      enqueue({ type: "context_menu", t: Date.now() });
+    };
+    const handleDrop = (event: DragEvent) => {
+      blockEvent(event);
+      enqueue({ type: "drop", t: Date.now() });
+    };
+    const handleDragOver = (event: DragEvent) => {
+      event.preventDefault();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const withModifier = event.metaKey || event.ctrlKey;
+      const withShift = event.shiftKey;
+
+      if (event.key === "F12") {
+        blockEvent(event);
+        enqueue({ type: "devtools_shortcut", t: Date.now(), shortcut: "F12" });
+        return;
+      }
+
+      if (withModifier && withShift && ["i", "j", "c"].includes(key)) {
+        blockEvent(event);
+        enqueue({
+          type: "devtools_shortcut",
+          t: Date.now(),
+          shortcut: `${event.metaKey ? "Meta" : "Ctrl"}+Shift+${key.toUpperCase()}`,
+        });
+        return;
+      }
+
+      if (withModifier && ["c", "x", "v", "s", "p", "u", "a"].includes(key)) {
+        blockEvent(event);
+        const actions: Record<string, string> = {
+          c: "copy",
+          x: "cut",
+          v: "paste",
+          s: "save",
+          p: "print",
+          u: "view_source",
+          a: "select_all",
+        };
+        enqueue({
+          type: "shortcut_block",
+          t: Date.now(),
+          action: actions[key] ?? key,
+        });
+      }
+    };
     const handlePageHide = () => flushWithBeacon();
 
     document.addEventListener("visibilitychange", handleVisibility);
-    document.addEventListener("copy", handleCopy);
-    document.addEventListener("paste", handlePaste);
+    document.addEventListener("copy", handleCopy, true);
+    document.addEventListener("cut", handleCut, true);
+    document.addEventListener("paste", handlePaste, true);
+    document.addEventListener("contextmenu", handleContextMenu, true);
+    document.addEventListener("drop", handleDrop, true);
+    document.addEventListener("dragover", handleDragOver, true);
+    window.addEventListener("keydown", handleKeyDown, true);
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("beforeunload", handlePageHide);
 
     return () => {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
-      document.removeEventListener("copy", handleCopy);
-      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("copy", handleCopy, true);
+      document.removeEventListener("cut", handleCut, true);
+      document.removeEventListener("paste", handlePaste, true);
+      document.removeEventListener("contextmenu", handleContextMenu, true);
+      document.removeEventListener("drop", handleDrop, true);
+      document.removeEventListener("dragover", handleDragOver, true);
+      window.removeEventListener("keydown", handleKeyDown, true);
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("beforeunload", handlePageHide);
 
@@ -187,9 +262,16 @@ export function useActivityTracker({
       recordRun: (passed: number, total: number) =>
         enqueue({ type: "run", t: Date.now(), passed, total }),
       recordCopy: () => enqueue({ type: "copy", t: Date.now() }),
+      recordCut: () => enqueue({ type: "cut", t: Date.now() }),
       recordPaste: () => enqueue({ type: "paste", t: Date.now() }),
       recordTabBlur: () => enqueue({ type: "tab_blur", t: Date.now() }),
       recordTabFocus: () => enqueue({ type: "tab_focus", t: Date.now() }),
+      recordContextMenu: () => enqueue({ type: "context_menu", t: Date.now() }),
+      recordDrop: () => enqueue({ type: "drop", t: Date.now() }),
+      recordShortcutBlock: (action: string) =>
+        enqueue({ type: "shortcut_block", t: Date.now(), action }),
+      recordDevtoolsShortcut: (shortcut: string) =>
+        enqueue({ type: "devtools_shortcut", t: Date.now(), shortcut }),
       recordCodeChange: (chars: number) => {
         debouncedCharsRef.current = chars;
 

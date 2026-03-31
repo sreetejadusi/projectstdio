@@ -32,7 +32,7 @@ export class AuthService {
           password_hash: passwordHash,
           full_name: input.fullName,
           role: input.role,
-          email_verified: false,
+          email_verified: true,
         })
         .select("id, role, email")
         .single();
@@ -113,12 +113,6 @@ export class AuthService {
     const valid = await bcrypt.compare(input.password, user.password_hash);
     if (!valid) {
       throw new AppError("Invalid credentials", 401, "INVALID_CREDENTIALS");
-    }
-
-    if (!user.email_verified) {
-      throw new AppError("Email not verified", 403, "EMAIL_NOT_VERIFIED", {
-        email: user.email,
-      });
     }
 
     return this.createSessionForUser(user.id, user.role, user.email, metadata);

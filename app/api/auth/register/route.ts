@@ -1,8 +1,6 @@
 import { authService } from "@/lib/services/auth.service";
-import { mailService } from "@/lib/services/mail.service";
 import { registerSchema } from "@/lib/validators/auth.validator";
-import { createEmailVerificationToken } from "@/lib/utils/emailTokens";
-import { getAppBaseUrl } from "@/lib/utils/url";
+import { createSessionToken, setSessionCookie } from "@/lib/utils/auth";
 import { getRequestContext } from "@/lib/utils/request";
 import { successResponse } from "@/lib/utils/api";
 import { handleApiError } from "@/lib/errors/errorHandler";
@@ -16,19 +14,31 @@ export async function POST(request: Request) {
     const body = registerSchema.parse(await request.json());
 
     const created = await authService.register(body);
+    const authResult = await authService.createSessionForUser(
+      created.userId,
+      created.role,
+      created.email,
+      {
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      },
+    );
+    const token = await createSessionToken({
+      userId: authResult.userId,
+      role: authResult.role,
+      sessionId: authResult.sessionId,
+      organizationId: authResult.organizationId,
+    });
 
-    const token = await createEmailVerificationToken(created.userId, created.email);
-    const verifyUrl = `${getAppBaseUrl()}/api/auth/confirm?token=${encodeURIComponent(token)}`;
-
-    await mailService.sendVerificationEmail(created.email, verifyUrl);
+    await setSessionCookie(token);
 
     return successResponse(
       {
-        userId: created.userId,
-        email: created.email,
-        requiresEmailConfirmation: true,
+        userId: authResult.userId,
+        role: authResult.role,
+        organizationId: authResult.organizationId,
       },
-      context,
+      { ...context, userId: authResult.userId, userRole: authResult.role },
       ENDPOINT,
     );
   } catch (error) {

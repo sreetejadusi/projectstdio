@@ -287,34 +287,34 @@ export type Database = {
       };
       submissions: {
         Row: {
+          acceptance: number | null;
           id: string;
-          user_id: string;
-          problem_id: string;
           classroom_id: string;
-          submission_code_path: string;
-          submission_data_file_path: string;
           language: "c" | "java" | "python";
+          problem_id: string;
+          submission_path: string;
           submitted_at: string;
+          user_id: string;
         };
         Insert: {
+          acceptance?: number | null;
           id?: string;
-          user_id: string;
-          problem_id: string;
           classroom_id: string;
-          submission_code_path: string;
-          submission_data_file_path: string;
           language: "c" | "java" | "python";
+          problem_id: string;
+          submission_path: string;
           submitted_at?: string;
+          user_id: string;
         };
         Update: {
+          acceptance?: number | null;
           id?: string;
-          user_id?: string;
-          problem_id?: string;
           classroom_id?: string;
-          submission_code_path?: string;
-          submission_data_file_path?: string;
           language?: "c" | "java" | "python";
+          problem_id?: string;
+          submission_path?: string;
           submitted_at?: string;
+          user_id?: string;
         };
         Relationships: [];
       };
