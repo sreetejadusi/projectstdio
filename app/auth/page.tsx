@@ -34,15 +34,17 @@ export default function AuthPage() {
 
     try {
       if (mode === "login") {
-        await fetchApi<LoginData>("/api/auth/login", {
+        const session = await fetchApi<LoginData>("/api/auth/login", {
           method: "POST",
           body: JSON.stringify({ email: form.email, password: form.password }),
         });
+        window.localStorage.setItem("frogmatrix-user-id", session.userId);
+        window.localStorage.setItem("frogmatrix-user-role", session.role);
         router.push("/dashboard");
         return;
       }
 
-      await fetchApi<RegisterData>("/api/auth/register", {
+      const registered = await fetchApi<RegisterData>("/api/auth/register", {
         method: "POST",
         body: JSON.stringify({
           fullName: form.fullName,
@@ -51,6 +53,7 @@ export default function AuthPage() {
           role: "student",
         }),
       });
+      window.localStorage.setItem("frogmatrix-user-id", registered.userId);
 
       router.push(`/auth/confirmation?email=${encodeURIComponent(form.email)}`);
     } catch (err) {

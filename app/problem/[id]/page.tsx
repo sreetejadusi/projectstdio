@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
-import type { ProblemSolveData, RunResult, SubmitResult } from "@/lib/types";
+import { createSubmission } from "@/lib/activity/api";
+import { getTestingUserId } from "@/lib/testing/session";
+import type { ProblemSolveData, RunResult } from "@/lib/types";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   FilledButton,
@@ -13,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { MonacoCodeEditor } from "@/components/editor/MonacoCodeEditor";
 import { ExecutionVisualizer } from "@/components/visualization/ExecutionVisualizer";
-import { useBehaviorTracking } from "@/hooks/useBehaviorTracking";
+import { useActivityTracker } from "@/hooks/useActivityTracker";
 
 type LeftTab = "description" | "submissions";
 type BottomTab = "testcases" | "results" | "visualization";
@@ -106,6 +108,14 @@ type TestcaseCheck = {
   status: "idle" | "pass" | "fail";
 };
 
+type SubmissionRecord = {
+  submissionId: string;
+  language: "python" | "c" | "java";
+  passed: number;
+  total: number;
+  response: Record<string, unknown> | null;
+};
+
 const leftTabClass = (active: boolean) =>
   [
     "rounded-full px-3 py-1.5 text-sm transition",
@@ -130,14 +140,16 @@ function testcaseLabel(id: string, index: number) {
 export default function ProblemSolvePage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const tracking = useBehaviorTracking();
+  const problemId = (params?.id as string) || "";
 
   const [problem, setProblem] = useState<ProblemSolveData | null>(null);
   const [leftTab, setLeftTab] = useState<LeftTab>("description");
   const [bottomTab, setBottomTab] = useState<BottomTab>("testcases");
   const [code, setCode] = useState("");
   const [language, setLanguage] = useState<"python" | "c" | "java">("python");
-  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
+  const [userId, setUserId] = useState(getTestingUserId);
+  const [submissionRecord, setSubmissionRecord] =
+    useState<SubmissionRecord | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [executionState, setExecutionState] =
     useState<ExecutionUiState>("idle");
@@ -149,19 +161,31 @@ export default function ProblemSolvePage() {
   const resizeStartYRef = useRef(0);
   const resizeStartHeightRef = useRef(540);
   const classroomId = searchParams.get("classroomId") ?? undefined;
+  const activity = useActivityTracker({ userId, problemId });
 
   useEffect(() => {
-    const id = params?.id as string;
-    if (!id) return;
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const testingUserId =
+      window.localStorage.getItem("frogmatrix-user-id") ?? getTestingUserId();
+    window.localStorage.setItem("frogmatrix-user-id", testingUserId);
+    setUserId(testingUserId);
+  }, []);
+
+  useEffect(() => {
+    if (!problemId) return;
 
     const load = async () => {
       setError(null);
       try {
-        const data = await api.getProblemSolveData(id, { classroomId });
+        const data = await api.getProblemSolveData(problemId, { classroomId });
         setProblem(data);
         setLanguage(data.selectedLanguage);
         setCode(data.baseCode || "");
         setRunResult(null);
+        setSubmissionRecord(null);
         setExecutionState("idle");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load problem");
@@ -169,15 +193,14 @@ export default function ProblemSolvePage() {
     };
 
     void load();
-  }, [classroomId, params]);
+  }, [classroomId, problemId]);
 
   useEffect(() => {
-    const id = params?.id as string;
-    if (!id || !problem) return;
+    if (!problemId || !problem) return;
 
     const loadLanguage = async () => {
       try {
-        const data = await api.getProblemSolveData(id, {
+        const data = await api.getProblemSolveData(problemId, {
           classroomId,
           language,
         });
@@ -193,7 +216,7 @@ export default function ProblemSolvePage() {
     if (language !== problem.selectedLanguage) {
       void loadLanguage();
     }
-  }, [classroomId, language, params, problem]);
+  }, [classroomId, language, problem, problemId]);
 
   const startResize = (event: React.MouseEvent<HTMLDivElement>) => {
     resizeStartYRef.current = event.clientY;
@@ -236,14 +259,18 @@ export default function ProblemSolvePage() {
   );
 
   const submissionOutput = useMemo(() => {
-    if (!submitResult) return "No submission created yet.";
+    if (!submissionRecord) return "No submission created yet.";
     return [
-      `Submission ID: ${submitResult.submissionId}`,
-      `Language: ${submitResult.language}`,
-      `Code Path: ${submitResult.submissionCodePath}`,
-      `Data Path: ${submitResult.submissionDataFilePath}`,
-    ].join("\n");
-  }, [submitResult]);
+      `Submission ID: ${submissionRecord.submissionId}`,
+      `Language: ${submissionRecord.language}`,
+      `Passed: ${submissionRecord.passed}/${submissionRecord.total}`,
+      submissionRecord.response
+        ? `Response: ${JSON.stringify(submissionRecord.response, null, 2)}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }, [submissionRecord]);
 
   const testcaseChecksById = useMemo(() => {
     const checks = visibleTestcases.map((test, index) => {
@@ -324,18 +351,38 @@ export default function ProblemSolvePage() {
   }, [executionState, runResult]);
 
   const handleSubmit = async () => {
-    const id = params?.id as string;
-    if (!problem || !id || !classroomId) {
-      setError("Classroom context is required to submit.");
+    if (!problem || !problemId) {
+      setError("Problem is not loaded.");
       return;
     }
 
     setSubmitting(true);
-    tracking.recordRun();
+    setError(null);
 
     try {
-      const result = await api.submitCode(id, classroomId, language, code);
-      setSubmitResult(result);
+      await activity.flush();
+
+      const total = runResult?.result?.total ?? problem.testcases.length;
+      const passed = runResult?.result?.passed ?? 0;
+      const submissionId = activity.getSubmissionId();
+      const response = await createSubmission({
+        user_id: userId,
+        problem_id: problemId,
+        code,
+        language,
+        passed,
+        total,
+      });
+
+      setSubmissionRecord({
+        submissionId,
+        language,
+        passed,
+        total,
+        response,
+      });
+      activity.clearQueue();
+      activity.resetSubmissionSession();
       setLeftTab("submissions");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit");
@@ -355,7 +402,6 @@ export default function ProblemSolvePage() {
     setRunning(true);
     setError(null);
     setBottomTab("results");
-    tracking.recordRun();
 
     try {
       const result = await api.runCodeWithPolling(
@@ -386,11 +432,9 @@ export default function ProblemSolvePage() {
       setRunResult(result);
       const total = result.result?.total ?? problem.testcases.length;
       const passed = result.result?.passed ?? 0;
-      const failureCount = Math.max(total - passed, 0);
-      if (failureCount > 0) {
-        tracking.recordTestFailure(failureCount);
-      }
+      activity.recordRun(passed, total);
     } catch (err) {
+      activity.recordRun(0, problem.testcases.length);
       const message = err instanceof Error ? err.message : "Failed to run code";
       if (message.includes("timed out")) {
         setExecutionState("timeout");
@@ -552,9 +596,7 @@ export default function ProblemSolvePage() {
               language={language}
               value={code}
               onChange={setCode}
-              onKeystroke={(timestamp) => tracking.recordKeystroke(timestamp)}
-              onPasteAttempt={() => tracking.recordPasteAttempt()}
-              onContentChange={(length) => tracking.recordContentChange(length)}
+              onContentChange={(length) => activity.recordCodeChange(length)}
             />
           </div>
 
