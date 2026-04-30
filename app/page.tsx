@@ -5,7 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import "./styles.css";
 
 type Phase = "intro" | "loading" | "survey" | "success";
-type QuestionType = "text" | "email" | "number" | "radio" | "checkbox" | "textarea" | "range";
+type QuestionType =
+  | "text"
+  | "email"
+  | "number"
+  | "radio"
+  | "checkbox"
+  | "textarea"
+  | "range";
 
 type Question = {
   id: string;
@@ -19,30 +26,270 @@ type Question = {
 };
 
 const COOKIE_KEY = "frogmatrix_survey_progress";
+async function submitUserDiscovery(data: {
+  name: string;
+  email: string;
+  response: string;
+}) {
+  const res = await fetch("/api/submit", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error((json as { error?: string })?.error || "Request failed");
+  }
+
+  return json;
+}
 
 const questions: Question[] = [
-  { id: "name", number: 1, question: "Name", type: "text", placeholder: "enter your name" },
-  { id: "age", number: 2, question: "Age", type: "number", placeholder: "enter your age" },
-  { id: "gender", number: 3, question: "Gender", type: "radio", options: ["Female", "Male", "Non-binary", "Prefer not to say"] },
-  { id: "email", number: 4, question: "Email", type: "email", placeholder: "enter your email" },
-  { id: "role", number: 5, question: "What best describes you?", type: "radio", options: ["School student", "College student (non-CS)", "CS/IT student", "Working professional", "Other"] },
-  { id: "level", number: 6, question: "What is your current level in programming?", type: "radio", options: ["Beginner (just started / learning basics)", "Intermediate (can solve some problems)", "Advanced (comfortable with DSA / projects)"] },
-  { id: "reasons", number: 7, question: "Why are you learning computer science/programming?", type: "checkbox", options: ["Placements / job preparation", "Competitive programming", "Personal interest", "Building projects/startups", "Academic requirements"] },
-  { id: "learnSources", number: 8, question: "How are you currently learning CS concepts?", type: "checkbox", options: ["YouTube", "Online platforms (e.g. LeetCode, GeeksforGeeks, Coursera)", "College lectures", "Books", "Friends/mentors"] },
-  { id: "weeklyHours", number: 9, question: "How many hours per week do you spend learning?", type: "radio", options: ["< 2 hours", "2-5 hours", "5-10 hours", "10+ hours"] },
-  { id: "confusionAction", number: 10, question: "What do you usually do when you do not understand a concept?", type: "radio", options: ["Search YouTube", "Google articles", "Ask friends", "Skip it", "Try random practice problems"] },
-  { id: "biggestProblems", number: 11, question: "What are the biggest problems you face while learning CS concepts?", type: "textarea", placeholder: "Describe a recent time when you struggled to understand a concept." },
-  { id: "biggestFrustration", number: 12, question: "Which of these frustrates you the most?", type: "radio", options: ["Concepts are too abstract", "Too much theory, not enough clarity", "No structured path", "Jumping between resources", "Not enough practice problems", "Solutions are hard to understand"] },
-  { id: "lostScale", number: 13, question: "On a scale of 1-5, how often do you feel lost/confused while learning?", type: "range", min: 1, max: 5 },
-  { id: "quitTopicWhy", number: 14, question: "Have you ever quit or paused learning a topic? Why?", type: "textarea", placeholder: "Share your experience" },
-  { id: "mostPlatform", number: 15, question: "Which platform do you use the MOST?", type: "radio", options: ["LeetCode", "GeeksforGeeks", "Codeforces", "YouTube", "Other"] },
-  { id: "likeAboutPlatform", number: 16, question: "What do you LIKE about it?", type: "textarea" },
-  { id: "hateAboutPlatform", number: 17, question: "What do you HATE about it?", type: "textarea" },
-  { id: "idealPlatform", number: 18, question: "If you could design the perfect learning platform, what would it have?", type: "textarea" },
-  { id: "bestFeature", number: 19, question: "Which feature would help you the MOST?", type: "radio", options: ["Visual animated explanations", "Step-by-step concept breakdowns", "Guided problem solving", "Personalized roadmap", "Practice + theory combined"] },
-  { id: "learningStyle", number: 20, question: "Would you prefer:", type: "radio", options: ["Learning concepts first, then problems", "Problems first, then concepts", "A mix of both"] },
-  { id: "likelyUse", number: 21, question: "If a platform solved your learning frustrations, how likely are you to use it?", type: "range", min: 1, max: 5 },
-  { id: "willingness", number: 22, question: "Would you be willing to:", type: "checkbox", options: ["Try a beta version", "Give feedback", "Pay for it (if valuable)"] },
+  {
+    id: "name",
+    number: 1,
+    question: "Name",
+    type: "text",
+    placeholder: "enter your name",
+  },
+  {
+    id: "age",
+    number: 2,
+    question: "Age",
+    type: "number",
+    placeholder: "enter your age",
+  },
+  {
+    id: "gender",
+    number: 3,
+    question: "Gender",
+    type: "radio",
+    options: ["Female", "Male", "Non-binary", "Prefer not to say"],
+  },
+  {
+    id: "email",
+    number: 4,
+    question: "Email",
+    type: "email",
+    placeholder: "enter your email",
+  },
+
+  {
+    id: "role",
+    number: 2,
+    question: "What best describes you?",
+    type: "radio",
+    options: [
+      "School student",
+      "College student (non-CS)",
+      "CS/IT student",
+      "Working professional",
+      "Other",
+    ],
+  },
+
+  {
+    id: "level",
+    number: 3,
+    question: "What is your current level in programming?",
+    type: "radio",
+    options: [
+      "Beginner (just started)",
+      "Intermediate (can solve some problems)",
+      "Advanced (comfortable with DSA / projects)",
+    ],
+  },
+
+  {
+    id: "reasons",
+    number: 4,
+    question: "Why are you learning programming?",
+    type: "checkbox",
+    options: [
+      "Placements / job preparation",
+      "Competitive programming",
+      "Personal interest",
+      "Building projects/startups",
+      "Academic requirements",
+    ],
+  },
+
+  {
+    id: "learnSources",
+    number: 5,
+    question: "How do you currently learn concepts?",
+    type: "checkbox",
+    options: [
+      "YouTube",
+      "Online platforms (LeetCode, GeeksforGeeks, etc.)",
+      "College lectures",
+      "Books",
+      "Friends/mentors",
+    ],
+  },
+
+  {
+    id: "consistency",
+    number: 6,
+    question: "How consistently do you learn?",
+    type: "radio",
+    options: ["Rarely", "A few times a week", "Almost daily", "Daily"],
+  },
+
+  {
+    id: "confusionAction",
+    number: 7,
+    question: "What do you usually do first when you get stuck?",
+    type: "radio",
+    options: [
+      "Search YouTube",
+      "Google articles",
+      "Ask friends",
+      "Skip it",
+      "Try random problems",
+    ],
+  },
+
+  {
+    id: "resourceSwitch",
+    number: 8,
+    question:
+      "How often do you switch between multiple resources for one topic?",
+    type: "radio",
+    options: ["Rarely", "Sometimes", "Very often", "Always"],
+  },
+
+  {
+    id: "lastStruggle",
+    number: 9,
+    question:
+      "Think about the last time you struggled with a concept. What happened?",
+    type: "textarea",
+    placeholder: "What topic? Where did it break?",
+  },
+
+  {
+    id: "feeling",
+    number: 10,
+    question: "How did that make you feel?",
+    type: "radio",
+    options: [
+      "Frustrated",
+      "Confused",
+      "Overwhelmed",
+      "Bored",
+      "Motivated to try harder",
+    ],
+  },
+
+  {
+    id: "whereStuck",
+    number: 11,
+    question: "Where do you usually get stuck?",
+    type: "radio",
+    options: [
+      "Understanding the concept",
+      "Applying it to problems",
+      "Remembering later",
+      "Debugging code",
+      "Staying consistent",
+    ],
+  },
+
+  {
+    id: "biggestProblems",
+    number: 12,
+    question: "What slows down your learning the most?",
+    type: "textarea",
+    placeholder: "Be specific if possible",
+  },
+
+  {
+    id: "lostScale",
+    number: 13,
+    question: "How often do you feel lost while learning?",
+    type: "range",
+    min: 1,
+    max: 5,
+  },
+
+  {
+    id: "quitTopicWhy",
+    number: 14,
+    question: "Have you ever stopped learning a topic midway? Why?",
+    type: "textarea",
+    placeholder: "What made you stop?",
+  },
+
+  {
+    id: "mostPlatform",
+    number: 15,
+    question: "Which platform do you use the most?",
+    type: "radio",
+    options: ["LeetCode", "GeeksforGeeks", "Codeforces", "YouTube", "Other"],
+  },
+
+  {
+    id: "likeAboutPlatform",
+    number: 16,
+    question: "What do you like about it?",
+    type: "textarea",
+  },
+
+  {
+    id: "hateAboutPlatform",
+    number: 17,
+    question: "What do you dislike about it?",
+    type: "textarea",
+  },
+
+  {
+    id: "missingSomething",
+    number: 18,
+    question: "What do you feel is missing in how you currently learn?",
+    type: "textarea",
+  },
+
+  {
+    id: "idealPlatform",
+    number: 19,
+    question: "What would make learning CS feel easier or more enjoyable?",
+    type: "textarea",
+  },
+
+  {
+    id: "learningStyle",
+    number: 20,
+    question: "How do you prefer to learn?",
+    type: "radio",
+    options: [
+      "Concepts first, then problems",
+      "Problems first, then concepts",
+      "A mix of both",
+    ],
+  },
+
+  {
+    id: "likelyUse",
+    number: 21,
+    question:
+      "If something solved your frustrations, how likely are you to use it?",
+    type: "range",
+    min: 1,
+    max: 5,
+  },
+
+  {
+    id: "willingness",
+    number: 22,
+    question: "Would you be open to:",
+    type: "checkbox",
+    options: ["Trying a beta", "Giving feedback", "Paying (if it helps a lot)"],
+  },
 ];
 
 export default function Home() {
@@ -56,7 +303,10 @@ export default function Home() {
   const [submitError, setSubmitError] = useState("");
 
   const current = questions[questionIndex];
-  const progress = useMemo(() => Math.round(((questionIndex + 1) / questions.length) * 100), [questionIndex]);
+  const progress = useMemo(
+    () => Math.round(((questionIndex + 1) / questions.length) * 100),
+    [questionIndex],
+  );
 
   useEffect(() => {
     try {
@@ -77,7 +327,11 @@ export default function Home() {
         setAnswers(parsed.answers);
       }
 
-      if (typeof parsed.questionIndex === "number" && parsed.questionIndex >= 0 && parsed.questionIndex < questions.length) {
+      if (
+        typeof parsed.questionIndex === "number" &&
+        parsed.questionIndex >= 0 &&
+        parsed.questionIndex < questions.length
+      ) {
         setQuestionIndex(parsed.questionIndex);
       }
 
@@ -90,11 +344,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const payload = encodeURIComponent(JSON.stringify({
-      phase: phase === "survey" ? "survey" : "intro",
-      questionIndex,
-      answers,
-    }));
+    const payload = encodeURIComponent(
+      JSON.stringify({
+        phase: phase === "survey" ? "survey" : "intro",
+        questionIndex,
+        answers,
+      }),
+    );
 
     document.cookie = `${COOKIE_KEY}=${payload}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
   }, [answers, phase, questionIndex]);
@@ -113,7 +369,8 @@ export default function Home() {
     setTimeout(() => transitionTo(() => setPhase("survey")), 1800);
   };
 
-  const setSingle = (id: string, value: string) => setAnswers((prev) => ({ ...prev, [id]: value }));
+  const setSingle = (id: string, value: string) =>
+    setAnswers((prev) => ({ ...prev, [id]: value }));
 
   const toggleMulti = (id: string, value: string) => {
     setAnswers((prev) => {
@@ -121,7 +378,9 @@ export default function Home() {
       const found = existing.includes(value);
       return {
         ...prev,
-        [id]: found ? existing.filter((item) => item !== value) : [...existing, value],
+        [id]: found
+          ? existing.filter((item) => item !== value)
+          : [...existing, value],
       };
     });
   };
@@ -172,35 +431,29 @@ export default function Home() {
     setSubmitError("");
     setIsSubmitting(true);
 
-    const payload = questions.map((q) => ({
+    const responsePayload = questions.map((q) => ({
       question_id: q.id,
       question_name: q.question,
       question_answer: answers[q.id] ?? (q.type === "checkbox" ? [] : ""),
     }));
 
     try {
-      const response = await fetch("/api/submit", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+      await submitUserDiscovery({
+        name: String(answers.name ?? ""),
+        email: String(answers.email ?? ""),
+        response: JSON.stringify(responsePayload),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to submit response.");
-      }
-
-      const json = JSON.stringify(payload, null, 2);
+      const json = JSON.stringify(responsePayload, null, 2);
       setSubmittedJson(json);
       setPhase("success");
       setQuestionIndex(0);
       setAnswers({});
       document.cookie = `${COOKIE_KEY}=; path=/; max-age=0; samesite=lax`;
-    } catch {
-      setSubmitError(
-        "Something went wrong while saving your response. Please try again.",
-      );
+    } catch (error) {
+      const fallback =
+        "Something went wrong while saving your response. Please try again.";
+      setSubmitError(error instanceof Error ? error.message : fallback);
     } finally {
       setIsSubmitting(false);
     }
@@ -211,8 +464,16 @@ export default function Home() {
       <div className="mx-auto flex min-h-screen w-full max-w-360 flex-col px-5 pb-6 pt-6 sm:px-8 lg:px-10">
         {phase === "survey" && (
           <header className="mb-14 flex items-start justify-between gap-4">
-            <Image src="/logo.svg" alt="FrogMatrix" width={120} height={38} priority />
-            <p className="text-lg font-medium text-[#787878] max-md:text-base">User Discovery Survey</p>
+            <Image
+              src="/logo.svg"
+              alt="FrogMatrix"
+              width={120}
+              height={38}
+              priority
+            />
+            <p className="text-lg font-medium text-[#787878] max-md:text-base">
+              User Discovery Survey
+            </p>
           </header>
         )}
 
@@ -222,7 +483,10 @@ export default function Home() {
               {questionIndex + 1}/{questions.length} • {progress}% Completed
             </p>
             <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#b9b9b9]">
-              <div className="h-full rounded-full bg-[#28bf5f] transition-all duration-300" style={{ width: `${progress}%` }} />
+              <div
+                className="h-full rounded-full bg-[#28bf5f] transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
             </div>
           </div>
         )}
@@ -232,9 +496,19 @@ export default function Home() {
         >
           {phase === "intro" && (
             <div className="mx-auto flex w-full max-w-4xl flex-col items-center justify-center text-center">
-              <Image src="/logo.svg" alt="FrogMatrix" width={166} height={36} priority className="mb-12" />
+              <Image
+                src="/logo.svg"
+                alt="FrogMatrix"
+                width={166}
+                height={36}
+                priority
+                className="mb-12"
+              />
               <p className="max-w-4xl text-[19px] leading-normal text-[#777777] max-lg:text-[18px] max-md:text-[16px]">
-                we are trying to build a platform different from the existing ones, to ease the learning of concepts in computer science. this survey helps us to understand more about the problems faced by learners like you, so we can build the perfect solution for you.
+                we are trying to build a platform different from the existing
+                ones, to ease the learning of concepts in computer science. this
+                survey helps us to understand more about the problems faced by
+                learners like you, so we can build the perfect solution for you.
               </p>
               <button
                 type="button"
@@ -248,9 +522,17 @@ export default function Home() {
 
           {phase === "loading" && (
             <div className="mx-auto flex w-full max-w-4xl flex-col items-center justify-center text-center">
-              <Image src="/logo.svg" alt="FrogMatrix" width={166} height={36} priority className="mb-12" />
+              <Image
+                src="/logo.svg"
+                alt="FrogMatrix"
+                width={166}
+                height={36}
+                priority
+                className="mb-12"
+              />
               <p className="text-center text-[18px] leading-normal text-[#777777] max-md:text-[16px]">
-                Loading Survey. Please try not to use AI for sharing your opinion.
+                Loading Survey. Please try not to use AI for sharing your
+                opinion.
               </p>
             </div>
           )}
@@ -279,7 +561,9 @@ export default function Home() {
               </h1>
 
               <div className="w-full">
-                {(current.type === "text" || current.type === "email" || current.type === "number") && (
+                {(current.type === "text" ||
+                  current.type === "email" ||
+                  current.type === "number") && (
                   <input
                     type={current.type}
                     value={String(getValue(current.id) || "")}
@@ -304,7 +588,9 @@ export default function Home() {
                       const checked =
                         current.type === "radio"
                           ? getValue(current.id) === option
-                          : ((getValue(current.id) as string[]) || []).includes(option);
+                          : ((getValue(current.id) as string[]) || []).includes(
+                              option,
+                            );
 
                       return (
                         <label
@@ -337,7 +623,8 @@ export default function Home() {
                   <div className="space-y-3">
                     <div className="flex flex-wrap gap-2">
                       {[1, 2, 3, 4, 5].map((value) => {
-                        const selected = String(getValue(current.id) || "") === String(value);
+                        const selected =
+                          String(getValue(current.id) || "") === String(value);
                         return (
                           <button
                             key={value}
@@ -355,12 +642,16 @@ export default function Home() {
                         );
                       })}
                     </div>
-                    <p className="text-base text-[#767676]">Selected: {String(getValue(current.id) || "-")}</p>
+                    <p className="text-base text-[#767676]">
+                      Selected: {String(getValue(current.id) || "-")}
+                    </p>
                   </div>
                 )}
 
                 {showValidation && !isCurrentAnswered && (
-                  <p className="mt-2 text-sm text-[#b42318]">This question is required.</p>
+                  <p className="mt-2 text-sm text-[#b42318]">
+                    This question is required.
+                  </p>
                 )}
               </div>
 
@@ -402,7 +693,9 @@ export default function Home() {
               {submittedJson && (
                 <div className="mt-7 rounded-xl border border-[#8ea497] bg-[#e4efe7] p-3">
                   <p className="mb-2 text-sm text-[#5f786a]">Submitted JSON</p>
-                  <pre className="max-h-64 overflow-auto text-xs text-[#496154]">{submittedJson}</pre>
+                  <pre className="max-h-64 overflow-auto text-xs text-[#496154]">
+                    {submittedJson}
+                  </pre>
                 </div>
               )}
             </div>
