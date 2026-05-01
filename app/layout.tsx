@@ -11,6 +11,9 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
+      <head>
+        <meta property="og:image" content="https://survey.frogmatrix.com/meta.png"></meta>
+      </head>
       <body>{children}</body>
     </html>
   );
