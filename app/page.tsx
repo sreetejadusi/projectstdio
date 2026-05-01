@@ -52,35 +52,30 @@ const questions: Question[] = [
   {
     id: "name",
     number: 1,
-    question: "Name",
+    question: "What should we call you?",
     type: "text",
-    placeholder: "enter your name",
+    placeholder: "Enter your name",
   },
+
   {
     id: "age",
     number: 2,
     question: "Age",
     type: "number",
-    placeholder: "enter your age",
+    placeholder: "Enter your age",
   },
-  {
-    id: "gender",
-    number: 3,
-    question: "Gender",
-    type: "radio",
-    options: ["Female", "Male", "Non-binary", "Prefer not to say"],
-  },
+
   {
     id: "email",
-    number: 4,
+    number: 3,
     question: "Email",
     type: "email",
-    placeholder: "enter your email",
+    placeholder: "Enter your email",
   },
 
   {
     id: "role",
-    number: 2,
+    number: 4,
     question: "What best describes you?",
     type: "radio",
     options: [
@@ -94,39 +89,21 @@ const questions: Question[] = [
 
   {
     id: "level",
-    number: 3,
-    question: "What is your current level in programming?",
+    number: 5,
+    question: "Your current level in programming?",
     type: "radio",
-    options: [
-      "Beginner (just started)",
-      "Intermediate (can solve some problems)",
-      "Advanced (comfortable with DSA / projects)",
-    ],
-  },
-
-  {
-    id: "reasons",
-    number: 4,
-    question: "Why are you learning programming?",
-    type: "checkbox",
-    options: [
-      "Placements / job preparation",
-      "Competitive programming",
-      "Personal interest",
-      "Building projects/startups",
-      "Academic requirements",
-    ],
+    options: ["Beginner", "Intermediate", "Advanced"],
   },
 
   {
     id: "learnSources",
-    number: 5,
-    question: "How do you currently learn concepts?",
+    number: 6,
+    question: "Where do you mostly learn from?",
     type: "checkbox",
     options: [
       "YouTube",
-      "Online platforms (LeetCode, GeeksforGeeks, etc.)",
-      "College lectures",
+      "Coding platforms (LeetCode, GFG, etc.)",
+      "College",
       "Books",
       "Friends/mentors",
     ],
@@ -134,161 +111,57 @@ const questions: Question[] = [
 
   {
     id: "consistency",
-    number: 6,
-    question: "How consistently do you learn?",
+    number: 7,
+    question: "How often do you learn?",
     type: "radio",
     options: ["Rarely", "A few times a week", "Almost daily", "Daily"],
   },
 
   {
-    id: "confusionAction",
-    number: 7,
-    question: "What do you usually do first when you get stuck?",
-    type: "radio",
-    options: [
-      "Search YouTube",
-      "Google articles",
-      "Ask friends",
-      "Skip it",
-      "Try random problems",
-    ],
-  },
-
-  {
-    id: "resourceSwitch",
-    number: 8,
-    question:
-      "How often do you switch between multiple resources for one topic?",
-    type: "radio",
-    options: ["Rarely", "Sometimes", "Very often", "Always"],
-  },
-
-  {
     id: "lastStruggle",
-    number: 9,
-    question:
-      "Think about the last time you struggled with a concept. What happened?",
+    number: 8,
+    question: "Last time you struggled with a concept — what happened?",
     type: "textarea",
-    placeholder: "What topic? Where did it break?",
-  },
-
-  {
-    id: "feeling",
-    number: 10,
-    question: "How did that make you feel?",
-    type: "radio",
-    options: [
-      "Frustrated",
-      "Confused",
-      "Overwhelmed",
-      "Bored",
-      "Motivated to try harder",
-    ],
+    placeholder: "What topic? What confused you?",
   },
 
   {
     id: "whereStuck",
-    number: 11,
+    number: 9,
     question: "Where do you usually get stuck?",
     type: "radio",
     options: [
-      "Understanding the concept",
-      "Applying it to problems",
-      "Remembering later",
-      "Debugging code",
+      "Understanding concepts",
+      "Solving problems",
+      "Remembering things",
+      "Debugging",
       "Staying consistent",
     ],
   },
 
   {
-    id: "biggestProblems",
-    number: 12,
+    id: "resourceSwitch",
+    number: 10,
+    question: "Do you switch between multiple resources for one topic?",
+    type: "radio",
+    options: ["Rarely", "Sometimes", "Very often", "Always"],
+  },
+
+  {
+    id: "biggestPain",
+    number: 11,
     question: "What slows down your learning the most?",
     type: "textarea",
-    placeholder: "Be specific if possible",
-  },
-
-  {
-    id: "lostScale",
-    number: 13,
-    question: "How often do you feel lost while learning?",
-    type: "range",
-    min: 1,
-    max: 5,
-  },
-
-  {
-    id: "quitTopicWhy",
-    number: 14,
-    question: "Have you ever stopped learning a topic midway? Why?",
-    type: "textarea",
-    placeholder: "What made you stop?",
-  },
-
-  {
-    id: "mostPlatform",
-    number: 15,
-    question: "Which platform do you use the most?",
-    type: "radio",
-    options: ["LeetCode", "GeeksforGeeks", "Codeforces", "YouTube", "Other"],
-  },
-
-  {
-    id: "likeAboutPlatform",
-    number: 16,
-    question: "What do you like about it?",
-    type: "textarea",
-  },
-
-  {
-    id: "hateAboutPlatform",
-    number: 17,
-    question: "What do you dislike about it?",
-    type: "textarea",
-  },
-
-  {
-    id: "missingSomething",
-    number: 18,
-    question: "What do you feel is missing in how you currently learn?",
-    type: "textarea",
-  },
-
-  {
-    id: "idealPlatform",
-    number: 19,
-    question: "What would make learning CS feel easier or more enjoyable?",
-    type: "textarea",
-  },
-
-  {
-    id: "learningStyle",
-    number: 20,
-    question: "How do you prefer to learn?",
-    type: "radio",
-    options: [
-      "Concepts first, then problems",
-      "Problems first, then concepts",
-      "A mix of both",
-    ],
+    placeholder: "Be real — what actually frustrates you?",
   },
 
   {
     id: "likelyUse",
-    number: 21,
-    question:
-      "If something solved your frustrations, how likely are you to use it?",
+    number: 12,
+    question: "If something fixed this, would you use it?",
     type: "range",
     min: 1,
     max: 5,
-  },
-
-  {
-    id: "willingness",
-    number: 22,
-    question: "Would you be open to:",
-    type: "checkbox",
-    options: ["Trying a beta", "Giving feedback", "Paying (if it helps a lot)"],
   },
 ];
 
