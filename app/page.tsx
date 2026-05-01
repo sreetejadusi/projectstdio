@@ -158,7 +158,7 @@ const questions: Question[] = [
   {
     id: "likelyUse",
     number: 12,
-    question: "If something fixed this, would you use it?",
+    question: "If something fixed these pain points of learning, how likely would you use it?",
     type: "range",
     min: 1,
     max: 5,
