@@ -158,10 +158,19 @@ const questions: Question[] = [
   {
     id: "likelyUse",
     number: 12,
-    question: "If something fixed these pain points of learning, how likely would you use it?",
+    question:
+      "If something fixed these pain points of learning, how likely would you use it?",
     type: "range",
     min: 1,
     max: 5,
+  },
+
+  {
+    id: "anythingElse",
+    number: 13,
+    question: "Is there anything else you'd like to share?",
+    type: "textarea",
+    placeholder: "Share any additional thoughts or experiences...",
   },
 ];
 
