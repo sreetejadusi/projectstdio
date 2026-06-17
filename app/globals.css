@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-outfit: var(--font-outfit);
+}
+
+@layer base {
+  body {
+    @apply bg-[#e1f0e5] text-[#0f3b21] font-outfit;
+  }
+}
