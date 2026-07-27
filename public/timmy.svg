@@ -1,0 +1,52 @@
+<svg width="220" height="340" viewBox="0 0 220 340"
+    xmlns="http://www.w3.org/2000/svg">
+
+    <!-- Head -->
+    <circle id="head" cx="110" cy="60" r="35" fill="#F6C89F"/>
+
+    <!-- Hair -->
+    <path id="hair" d="M75 55
+           Q110 10 145 55
+           L145 40
+           Q110 0 75 40Z" fill="#2D2D2D"/>
+
+    <!-- Eyes -->
+    <circle cx="97" cy="60" r="3" fill="#222"/>
+    <circle cx="123" cy="60" r="3" fill="#222"/>
+
+    <!-- Smile -->
+    <path d="M98 75 Q110 84 122 75" stroke="#444" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+    <!-- Neck -->
+    <rect x="104" y="92" width="12" height="10" fill="#F6C89F"/>
+
+    <!-- Shirt -->
+    <rect id="shirt" x="75" y="100" width="70" height="70" rx="12" fill="#4F8EF7"/>
+
+    <!-- Left Arm -->
+    <rect id="leftArm" x="48" y="105" width="25" height="12" rx="6" fill="#F6C89F"/>
+
+    <!-- Right Arm -->
+    <rect id="rightArm" x="147" y="105" width="25" height="12" rx="6" fill="#F6C89F"/>
+
+    <!-- Left Hand -->
+    <circle cx="48" cy="111" r="8" fill="#F6C89F"/>
+
+    <!-- Right Hand -->
+    <circle cx="172" cy="111" r="8" fill="#F6C89F"/>
+
+    <!-- Pants -->
+    <rect id="pants" x="78" y="170" width="64" height="55" rx="8" fill="#2F3E5C"/>
+
+    <!-- Left Leg -->
+    <rect id="leftLeg" x="88" y="225" width="12" height="55" rx="6" fill="#2F3E5C"/>
+
+    <!-- Right Leg -->
+    <rect id="rightLeg" x="120" y="225" width="12" height="55" rx="6" fill="#2F3E5C"/>
+
+    <!-- Shoes -->
+    <ellipse id="leftShoe" cx="94" cy="287" rx="14" ry="7" fill="#444"/>
+
+    <ellipse id="rightShoe" cx="126" cy="287" rx="14" ry="7" fill="#444"/>
+
+</svg>
